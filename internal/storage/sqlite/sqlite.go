@@ -16,6 +16,7 @@ import (
 	"hash/fnv"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -104,6 +105,26 @@ CREATE TABLE IF NOT EXISTS services (
 	image_url    TEXT NOT NULL DEFAULT '',
 	PRIMARY KEY (business_id, name)
 );
+CREATE TABLE IF NOT EXISTS externals (
+	source        TEXT NOT NULL,
+	place_id      TEXT NOT NULL,
+	business_id   INTEGER NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+	name          TEXT NOT NULL DEFAULT '',
+	category      TEXT NOT NULL DEFAULT '',
+	address       TEXT NOT NULL DEFAULT '',
+	neighborhood  TEXT NOT NULL DEFAULT '',
+	lat           REAL,
+	lng           REAL,
+	google_rating REAL,
+	google_reviews INTEGER,
+	price_level   TEXT NOT NULL DEFAULT '',
+	price_from    REAL,
+	price_to      REAL,
+	currency      TEXT NOT NULL DEFAULT '',
+	services      TEXT NOT NULL DEFAULT '[]',
+	PRIMARY KEY (source, place_id)
+);
+CREATE INDEX IF NOT EXISTS idx_externals_business ON externals(business_id);
 CREATE INDEX IF NOT EXISTS idx_businesses_category  ON businesses(category);
 CREATE INDEX IF NOT EXISTS idx_businesses_city      ON businesses(city);
 CREATE INDEX IF NOT EXISTS idx_businesses_rating    ON businesses(rating);
@@ -427,6 +448,11 @@ func (r *Repo) GetByID(ctx context.Context, id int64) (*domain.Business, error) 
 	if err != nil {
 		return nil, err
 	}
+
+	b.Externals, err = loadExternals(ctx, r.db, id)
+	if err != nil {
+		return nil, err
+	}
 	return b, nil
 }
 
@@ -625,6 +651,95 @@ func (r *Repo) CategoryFacets(ctx context.Context) ([]domain.Facet, error) {
 // CityFacets implements domain.BusinessRepository.
 func (r *Repo) CityFacets(ctx context.Context) ([]domain.Facet, error) {
 	return r.facets(ctx, "city")
+}
+
+// Stats implements domain.BusinessRepository. It computes most aggregates in
+// a single pass over the businesses table, plus one scalar for externals.
+func (r *Repo) Stats(ctx context.Context) (domain.Stats, error) {
+	var s domain.Stats
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(DISTINCT business_id) FROM externals`).Scan(&s.WithExternals); err != nil {
+		return domain.Stats{}, fmt.Errorf("stats externals: %w", err)
+	}
+
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT sources, rating, lat, lng, price_from, price_to, sponsored, verified FROM businesses`)
+	if err != nil {
+		return domain.Stats{}, fmt.Errorf("stats scan: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	srcTally := map[string]int{}
+	stars := map[int]int{} // 1..5
+	var ratingSum, priceFromSum, priceToSum float64
+	for rows.Next() {
+		var raw string
+		var rating, lat, lng, pFrom, pTo sql.NullFloat64
+		var sponsored, verified sql.NullInt64
+		if err := rows.Scan(&raw, &rating, &lat, &lng, &pFrom, &pTo, &sponsored, &verified); err != nil {
+			return domain.Stats{}, fmt.Errorf("scan stats row: %w", err)
+		}
+		s.Total++
+		var srcs []string
+		if err := json.Unmarshal([]byte(raw), &srcs); err != nil {
+			return domain.Stats{}, fmt.Errorf("decode sources: %w", err)
+		}
+		for _, src := range srcs {
+			srcTally[src]++
+		}
+		if len(srcs) == 1 && srcs[0] == "supabase" {
+			s.Unknown++
+		}
+		if sponsored.Int64 != 0 {
+			s.Sponsored++
+		}
+		if verified.Int64 != 0 {
+			s.Verified++
+		}
+		if lat.Valid && lng.Valid {
+			s.WithGeo++
+		}
+		if pFrom.Valid && pTo.Valid {
+			s.WithPrice++
+			priceFromSum += pFrom.Float64
+			priceToSum += pTo.Float64
+		}
+		if rating.Valid {
+			s.Rated++
+			ratingSum += rating.Float64
+			st := int(rating.Float64 + 0.5)
+			if st < 1 {
+				st = 1
+			} else if st > 5 {
+				st = 5
+			}
+			stars[st]++
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return domain.Stats{}, fmt.Errorf("iterate stats: %w", err)
+	}
+
+	if s.Rated > 0 {
+		s.AvgRating = ratingSum / float64(s.Rated)
+	}
+	if s.WithPrice > 0 {
+		s.AvgPriceFrom = priceFromSum / float64(s.WithPrice)
+		s.AvgPriceTo = priceToSum / float64(s.WithPrice)
+	}
+	for src, n := range srcTally {
+		s.BySource = append(s.BySource, domain.Facet{Value: src, Count: n})
+	}
+	sort.Slice(s.BySource, func(i, j int) bool {
+		if s.BySource[i].Count != s.BySource[j].Count {
+			return s.BySource[i].Count > s.BySource[j].Count
+		}
+		return s.BySource[i].Value < s.BySource[j].Value
+	})
+	for st := 5; st >= 1; st-- {
+		s.RatingDist = append(s.RatingDist, domain.Facet{Value: strconv.Itoa(st), Count: stars[st]})
+	}
+	return s, nil
 }
 
 // facets aggregates one column of the canonical businesses table. The column

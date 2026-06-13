@@ -114,6 +114,7 @@ func (m *jobManager) status() (job, bool) {
 type scrapeRequest struct {
 	Sources          []string `json:"sources"`
 	Country          string   `json:"country"`
+	City             string   `json:"city"`
 	Limit            int      `json:"limit"`
 	Concurrency      int      `json:"concurrency"`
 	RPS              float64  `json:"rps"`
@@ -128,6 +129,7 @@ func (r scrapeRequest) toOptions() ingest.Options {
 	return ingest.Options{
 		Sources:          r.Sources,
 		Country:          r.Country,
+		City:             r.City,
 		Limit:            r.Limit,
 		Concurrency:      r.Concurrency,
 		RPS:              r.RPS,

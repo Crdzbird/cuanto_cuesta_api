@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>cuanto_cuesta · Valencia grooming demand</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    :root {
+      --bg:#0f1115; --panel:#181b22; --panel2:#1f232c; --text:#e6e8ee; --muted:#9aa3b2;
+      --line:#2a2f3a; --accent:#5b8cff; --barber:#5b8cff; --hair:#2dd4a7; --warm:#f6a609;
+    }
+    @media (prefers-color-scheme: light) {
+      :root { --bg:#f4f6fb; --panel:#fff; --panel2:#eef2f8; --text:#10131a; --muted:#5b6472; --line:#e3e8f0; }
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text);
+      font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+    header { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:18px 28px;
+      border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:10; }
+    header h1 { font-size:18px; margin:0; font-weight:650; }
+    header .spacer { flex:1; }
+    .updated { color:var(--muted); font-size:13px; }
+    a.nav { color:var(--muted); text-decoration:none; font-size:14px; }
+    a.nav:hover { color:var(--text); }
+    button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:8px 14px;
+      font-size:14px; font-weight:600; cursor:pointer; }
+    button.ghost { background:var(--panel2); color:var(--text); border:1px solid var(--line); }
+    .wrap { padding:22px 28px; max-width:1180px; margin:0 auto; }
+    .note { background:var(--panel2); border:1px solid var(--line); border-left:3px solid var(--warm);
+      border-radius:10px; padding:12px 16px; color:var(--muted); font-size:13px; margin-bottom:16px; }
+    .note b { color:var(--text); }
+    .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px; }
+    .kpi .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.6px; }
+    .kpi .value { font-size:30px; font-weight:700; margin-top:6px; }
+    .kpi .sub { color:var(--muted); font-size:13px; margin-top:2px; }
+    .tag { font-size:10px; font-weight:700; padding:1px 6px; border-radius:5px; vertical-align:middle; margin-left:6px; }
+    .tag.real { background:rgba(45,212,167,.18); color:var(--hair); }
+    .tag.model { background:rgba(246,166,9,.18); color:var(--warm); }
+    .charts { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px; }
+    .charts .full { grid-column:1/-1; }
+    .card h2 { font-size:13px; font-weight:600; color:var(--muted); margin:0 0 4px; text-transform:uppercase; letter-spacing:.6px; }
+    .card .hint { color:var(--muted); font-size:12px; margin:0 0 12px; }
+    .chart-box { position:relative; height:300px; }
+    .chart-box.short { height:240px; }
+    table { width:100%; border-collapse:collapse; }
+    td,th { text-align:left; padding:9px 6px; border-bottom:1px solid var(--line); font-size:14px; }
+    th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.5px; }
+    td.num { text-align:right; font-variant-numeric:tabular-nums; }
+    @media (max-width:780px){ .charts { grid-template-columns:1fr; } }
+    #error { display:none; color:#fff; background:#c0392b; padding:12px 16px; border-radius:10px; margin-bottom:14px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Grooming demand · <span id="cityName">Valencia</span></h1>
+    <a class="nav" href="/dashboard">← catalog dashboard</a>
+    <div class="spacer"></div>
+    <span class="updated" id="updated"></span>
+    <button class="ghost" id="queryBtn" type="button">Price queries: off</button>
+    <button class="ghost" id="autoBtn" type="button">Auto: off</button>
+    <button id="refreshBtn" type="button">Refresh</button>
+  </header>
+
+  <div class="wrap">
+    <div id="error"></div>
+    <div class="note">
+      <b>How to read this.</b> Reviews, ratings and neighborhoods are <b>real</b> engagement data
+      (a proxy for how sought-after each business is). Search figures are a <b>model</b> derived
+      from that engagement (<span id="modelNote"></span>) — illustrative, not measured search volume.
+    </div>
+
+    <section class="kpis">
+      <div class="card kpi"><div class="label">Est. monthly searches <span class="tag model">model</span></div><div class="value" id="kpiSearches">–</div><div class="sub">barbershops + hair salons</div></div>
+      <div class="card kpi"><div class="label">Total reviews <span class="tag real">real</span></div><div class="value" id="kpiReviews">–</div><div class="sub">customer engagement</div></div>
+      <div class="card kpi"><div class="label">Businesses <span class="tag real">real</span></div><div class="value" id="kpiBiz">–</div><div class="sub">supply in city</div></div>
+      <div class="card kpi"><div class="label">Avg rating <span class="tag real">real</span></div><div class="value" id="kpiRating">–</div><div class="sub">across rated</div></div>
+      <div class="card kpi"><div class="label">Reviews / business <span class="tag real">real</span></div><div class="value" id="kpiPer">–</div><div class="sub">demand per venue</div></div>
+    </section>
+
+    <section class="charts">
+      <div class="card full" id="queryCard" style="display:none">
+        <h2>Price-question searches by language <span class="tag model">model</span></h2>
+        <p class="hint" id="queryHint">how many searches are price questions — “¿Cuánto cuesta?”, “How much does it cost?”, “Скільки це коштує?”</p>
+        <div style="display:grid; grid-template-columns:1fr 1.4fr; gap:18px; align-items:center">
+          <div class="chart-box short"><canvas id="queryChart"></canvas></div>
+          <table>
+            <thead><tr><th>Phrase</th><th>Language</th><th class="num">Est. searches/mo</th><th class="num">Share</th></tr></thead>
+            <tbody id="queryBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card full">
+        <h2>Seasonal search interest <span class="tag model">model</span></h2>
+        <p class="hint">estimated monthly searches across the year (modeled from engagement + grooming seasonality)</p>
+        <div class="chart-box"><canvas id="trendChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Interest split <span class="tag real">real</span></h2>
+        <p class="hint">reviews: barbershops vs hair salons</p>
+        <div class="chart-box short"><canvas id="splitChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Demand by neighborhood <span class="tag real">real</span></h2>
+        <p class="hint">reviews concentrated by area</p>
+        <div class="chart-box short"><canvas id="neighChart"></canvas></div>
+      </div>
+      <div class="card full">
+        <h2>Most sought-after <span class="tag real">real</span></h2>
+        <p class="hint">businesses ranked by review engagement</p>
+        <table>
+          <thead><tr><th>#</th><th>Business</th><th>Type</th><th class="num">Reviews</th><th class="num">Rating</th></tr></thead>
+          <tbody id="topBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+    const $ = (id) => document.getElementById(id);
+    const charts = {};
+    let autoTimer = null, countdown = 0, withQueries = false;
+    const H = { 'ngrok-skip-browser-warning':'1' };
+    const fmt = (n) => n.toLocaleString();
+
+    function baseOpts(extra={}) {
+      return { responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ labels:{ color:css('--text') } } }, ...extra };
+    }
+    function axes() {
+      return { x:{ ticks:{color:css('--muted')}, grid:{color:css('--line')} },
+               y:{ ticks:{color:css('--muted')}, grid:{color:css('--line')}, beginAtZero:true } };
+    }
+    function upsert(key, ctxId, cfg) {
+      if (charts[key]) { charts[key].data=cfg.data; charts[key].options=cfg.options; charts[key].update(); }
+      else charts[key] = new Chart($(ctxId), cfg);
+    }
+
+    async function load() {
+      try {
+        const url = '/v1/demand?city=valencia&categories=barberia,peluqueria' + (withQueries ? '&query=true' : '');
+        const res = await fetch(url, { headers:H });
+        if (!res.ok) throw new Error('HTTP '+res.status);
+        render(await res.json());
+        $('error').style.display='none';
+        $('updated').textContent = 'Updated '+new Date().toLocaleTimeString();
+      } catch(e) {
+        $('error').textContent = 'Could not load /v1/demand: '+e.message;
+        $('error').style.display='block';
+      }
+    }
+
+    function render(d) {
+      $('cityName').textContent = d.city.charAt(0).toUpperCase()+d.city.slice(1);
+      $('modelNote').textContent = d.interest.model;
+      const eng = d.engagement, sup = d.supply, it = d.interest;
+      $('kpiSearches').textContent = fmt(it.estimated_monthly_searches);
+      $('kpiReviews').textContent = fmt(eng.total_reviews);
+      $('kpiBiz').textContent = sup.businesses;
+      $('kpiRating').textContent = eng.avg_rating + '★';
+      $('kpiPer').textContent = sup.businesses ? Math.round(eng.total_reviews / sup.businesses) : 0;
+
+      // Seasonal trend line
+      const tr = it.monthly_trend || [];
+      upsert('trend','trendChart',{ type:'line',
+        data:{ labels:tr.map(x=>x.month), datasets:[{ label:'est. searches', data:tr.map(x=>x.estimated_searches),
+          borderColor:css('--warm'), backgroundColor:'rgba(246,166,9,.15)', fill:true, tension:.35, pointRadius:3 }] },
+        options: baseOpts({ plugins:{legend:{display:false},
+          tooltip:{callbacks:{label:c=>fmt(c.raw)+' searches'}}}, scales:axes() }) });
+
+      // Interest split doughnut (reviews by category)
+      const rc = eng.reviews_by_category || [];
+      upsert('split','splitChart',{ type:'doughnut',
+        data:{ labels:rc.map(x=>x.label), datasets:[{ data:rc.map(x=>x.count),
+          backgroundColor:[css('--barber'),css('--hair'),'#a78bfa','#38bdf8'], borderWidth:0 }] },
+        options: baseOpts({ cutout:'60%', plugins:{ legend:{ position:'bottom', labels:{color:css('--text')} },
+          tooltip:{callbacks:{label:c=>c.label+': '+fmt(c.raw)+' reviews'}} } }) });
+
+      // Neighborhood bar
+      const nb = eng.by_neighborhood || [];
+      if (nb.length) {
+        upsert('neigh','neighChart',{ type:'bar',
+          data:{ labels:nb.map(x=>x.name), datasets:[{ data:nb.map(x=>x.reviews),
+            backgroundColor:css('--accent'), borderRadius:6 }] },
+          options: baseOpts({ indexAxis:'y', plugins:{legend:{display:false},
+            tooltip:{callbacks:{label:c=>fmt(c.raw)+' reviews · '+nb[c.dataIndex].businesses+' venues'}}},
+            scales:{ x:{ticks:{color:css('--muted')},grid:{color:css('--line')},beginAtZero:true},
+                     y:{ticks:{color:css('--muted')},grid:{display:false}} } }) });
+      }
+
+      // Top businesses table
+      $('topBody').innerHTML = (eng.top_businesses||[]).map((b,i) =>
+        `<tr><td>${i+1}</td><td>${esc(b.name)}</td><td>${esc(b.label||'')}</td>
+         <td class="num">${fmt(b.reviews)}</td><td class="num">${b.rating}★</td></tr>`).join('')
+        || '<tr><td colspan="5">No data.</td></tr>';
+
+      // Price-question breakdown (only when query=true)
+      const card = $('queryCard');
+      if (d.queries) {
+        card.style.display = '';
+        const ph = d.queries.phrases || [];
+        $('queryHint').textContent = 'price questions ≈ ' + fmt(d.queries.total_price_intent_searches)
+          + '/mo · ' + d.queries.model;
+        upsert('query','queryChart',{ type:'doughnut',
+          data:{ labels:ph.map(p=>p.language), datasets:[{ data:ph.map(p=>p.estimated_searches),
+            backgroundColor:['#f6a609','#5b8cff','#2dd4a7','#a78bfa'], borderWidth:0 }] },
+          options: baseOpts({ cutout:'58%', plugins:{ legend:{ position:'bottom', labels:{color:css('--text')} },
+            tooltip:{ callbacks:{ label:c=>c.label+': '+fmt(c.raw)+'/mo' } } } }) });
+        $('queryBody').innerHTML = ph.map(p =>
+          `<tr><td>${esc(p.phrase)}</td><td>${esc(p.language)}</td>
+           <td class="num">${fmt(p.estimated_searches)}</td><td class="num">${p.percent}%</td></tr>`).join('');
+      } else {
+        card.style.display = 'none';
+      }
+    }
+    function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+    $('refreshBtn').addEventListener('click', load);
+    $('queryBtn').addEventListener('click', (e) => {
+      withQueries = !withQueries;
+      e.target.textContent = 'Price queries: ' + (withQueries ? 'on' : 'off');
+      load();
+    });
+    $('autoBtn').addEventListener('click', (e) => {
+      if (autoTimer) { clearInterval(autoTimer); autoTimer=null; e.target.textContent='Auto: off'; }
+      else { countdown=15; autoTimer=setInterval(()=>{ countdown--; if(countdown<=0){load();countdown=15;}
+        e.target.textContent='Auto: '+countdown+'s'; },1000); load(); }
+    });
+    load();
+  </script>
+</body>
+</html>

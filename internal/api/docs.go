@@ -12,6 +12,17 @@ import (
 //go:embed openapi.yaml
 var openapiSpec []byte
 
+// dashboardHTML is the live stats page: it fetches /v1/stats and renders
+// charts (Chart.js from CDN). Embedded so the binary serves it directly.
+//
+//go:embed dashboard.html
+var dashboardHTML []byte
+
+// demandHTML is the Valencia demand/interest page.
+//
+//go:embed demand.html
+var demandHTML []byte
+
 // swaggerUIPage renders Swagger UI from the jsDelivr CDN against our embedded
 // spec. The page is tiny; the UI assets load from the CDN at view time.
 const swaggerUIPage = `<!DOCTYPE html>
@@ -46,4 +57,16 @@ func (h *handlers) openapiYAML(w http.ResponseWriter, _ *http.Request) {
 func (h *handlers) docs(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(swaggerUIPage))
+}
+
+// dashboard serves the live stats charts page.
+func (h *handlers) dashboard(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(dashboardHTML)
+}
+
+// demandPage serves the Valencia demand/interest charts page.
+func (h *handlers) demandPage(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(demandHTML)
 }

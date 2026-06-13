@@ -21,6 +21,10 @@ func (f *fakeRepo) UpsertListing(context.Context, *domain.Listing) (int64, error
 	panic("not used in API tests")
 }
 
+func (f *fakeRepo) SyncExternal(context.Context, *domain.External) (int64, error) {
+	panic("not used in API tests")
+}
+
 func (f *fakeRepo) GetByID(_ context.Context, id int64) (*domain.Business, error) {
 	b, ok := f.businesses[id]
 	if !ok {
@@ -47,6 +51,24 @@ func (f *fakeRepo) CategoryFacets(context.Context) ([]domain.Facet, error) {
 
 func (f *fakeRepo) CityFacets(context.Context) ([]domain.Facet, error) {
 	return []domain.Facet{{Value: "madrid", Count: 3}}, nil
+}
+
+func (f *fakeRepo) DemandStats(context.Context, string, []string) (domain.Demand, error) {
+	return domain.Demand{
+		City: "valencia", Categories: []string{"barberia", "peluqueria"},
+		Businesses: 80, TotalReviews: 12000, AvgRating: 4.9,
+		ByCategory:        []domain.Facet{{Value: "barberia", Count: 69}, {Value: "peluqueria", Count: 11}},
+		ReviewsByCategory: []domain.Facet{{Value: "barberia", Count: 9000}, {Value: "peluqueria", Count: 3000}},
+		Neighborhoods:     []domain.DemandArea{{Name: "Ruzafa", Businesses: 25, Reviews: 8000}},
+		Top:               []domain.DemandBiz{{ID: 1, Name: "Fresh Fade", Category: "barberia", Reviews: 660, Rating: 5}},
+	}, nil
+}
+
+func (f *fakeRepo) Stats(context.Context) (domain.Stats, error) {
+	return domain.Stats{
+		Total: 160, Unknown: 23, WithExternals: 18, Sponsored: 48, Verified: 96,
+		BySource: []domain.Facet{{Value: "booksy", Count: 90}, {Value: "supabase", Count: 25}},
+	}, nil
 }
 
 var testNow = time.Date(2026, 6, 13, 12, 0, 0, 0, time.UTC)
@@ -80,10 +102,12 @@ func newTestServer(t *testing.T) *httptest.Server {
 	mux.HandleFunc("GET /v1/businesses/{id}/reviews", h.getBusinessReviews)
 	mux.HandleFunc("GET /v1/categories", h.listCategories)
 	mux.HandleFunc("GET /v1/cities", h.listCities)
+	mux.HandleFunc("GET /v1/stats", h.stats)
 	mux.HandleFunc("POST /v1/admin/scrape", h.startScrape)
 	mux.HandleFunc("GET /v1/admin/scrape", h.scrapeStatus)
 	mux.HandleFunc("GET /openapi.yaml", h.openapiYAML)
 	mux.HandleFunc("GET /docs", h.docs)
+	mux.HandleFunc("GET /dashboard", h.dashboard)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv
@@ -138,6 +162,27 @@ func TestGetBusinessDetail(t *testing.T) {
 	}
 	if len(body.Listings) != 1 || body.Listings[0].Source != "booksy" {
 		t.Errorf("listings = %+v", body.Listings)
+	}
+}
+
+func TestCategoryLabel(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		category, schemaType, want string
+	}{
+		{"barberia", "HairSalon", "Barbería"},
+		{"tienda-de-tatuajes", "LocalBusiness", "Tatuajes"}, // drops "tienda de"
+		{"salon-de-unas", "NailSalon", "Uñas"},
+		{"", "HairSalon", "Peluquería"},        // no slug → schema-type fallback
+		{"", "NailSalon", "Uñas"},              // no slug → schema-type fallback
+		{"futuro-servicio", "", "Futuro servicio"}, // unknown → prettified
+		{"centro-de-yoga", "", "Yoga"},         // unknown with generic prefix stripped
+		{"", "", ""},                            // nothing to label
+	}
+	for _, tt := range tests {
+		if got := categoryLabel(tt.category, tt.schemaType); got != tt.want {
+			t.Errorf("categoryLabel(%q,%q) = %q, want %q", tt.category, tt.schemaType, got, tt.want)
+		}
 	}
 }
 
@@ -227,6 +272,43 @@ func TestETagRevalidation(t *testing.T) {
 	}
 }
 
+func TestStatsEndpoint(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t)
+	resp := get(t, srv.URL+"/v1/stats", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("stats status = %d", resp.StatusCode)
+	}
+	var body struct {
+		Total   int `json:"total"`
+		Unknown struct {
+			Count   int     `json:"count"`
+			Percent float64 `json:"percent"`
+		} `json:"unknown"`
+		Known struct {
+			Count   int     `json:"count"`
+			Percent float64 `json:"percent"`
+		} `json:"known"`
+		BySource []struct {
+			Source  string  `json:"source"`
+			Percent float64 `json:"percent"`
+		} `json:"by_source"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Total != 160 || body.Unknown.Count != 23 || body.Known.Count != 137 {
+		t.Errorf("counts = total %d unknown %d known %d", body.Total, body.Unknown.Count, body.Known.Count)
+	}
+	// 23/160 = 14.4%, 137/160 = 85.6%; the two shares add to 100.
+	if body.Unknown.Percent != 14.4 || body.Known.Percent != 85.6 {
+		t.Errorf("percentages = unknown %.1f known %.1f", body.Unknown.Percent, body.Known.Percent)
+	}
+	if len(body.BySource) == 0 {
+		t.Error("by_source is empty")
+	}
+}
+
 func TestFacetEndpoints(t *testing.T) {
 	t.Parallel()
 	srv := newTestServer(t)
@@ -267,6 +349,14 @@ func TestDocsAndSpec(t *testing.T) {
 	docs := get(t, srv.URL+"/docs", nil)
 	if docs.StatusCode != http.StatusOK {
 		t.Errorf("docs status = %d", docs.StatusCode)
+	}
+
+	dash := get(t, srv.URL+"/dashboard", nil)
+	if dash.StatusCode != http.StatusOK {
+		t.Errorf("dashboard status = %d", dash.StatusCode)
+	}
+	if ct := dash.Header.Get("Content-Type"); ct != "text/html; charset=utf-8" {
+		t.Errorf("dashboard content-type = %q", ct)
 	}
 }
 

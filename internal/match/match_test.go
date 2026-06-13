@@ -77,6 +77,36 @@ func TestLeadingPostal(t *testing.T) {
 	}
 }
 
+func TestNameSimilarityIgnoresGenericWords(t *testing.T) {
+	t.Parallel()
+	// Different Ruzafa barbershops must NOT look identical via generic tokens.
+	if s := NameSimilarity("BARBER SHOP", "Four Four - Barber Shop"); s != 0 {
+		t.Errorf("generic-only name matched: sim=%.2f, want 0", s)
+	}
+	if s := NameSimilarity("Mateusz Barber", "Four Four - Barber Shop"); s != 0 {
+		t.Errorf("distinct barbers matched: sim=%.2f, want 0", s)
+	}
+	// Same venue with a generic suffix still matches on the distinctive token.
+	if s := NameSimilarity("Forbici", "Forbici Men's Grooming Atelier"); s < 0.9 {
+		t.Errorf("same venue did not match: sim=%.2f, want >=0.9", s)
+	}
+	if s := NameSimilarity("Mateusz Barber", "Mateusz Barbería Ruzafa"); s < 0.9 {
+		t.Errorf("same barber did not match: sim=%.2f, want >=0.9", s)
+	}
+}
+
+func TestSameBusinessDenseAreaNoFalseMerge(t *testing.T) {
+	t.Parallel()
+	// Two different barbers ~150 m apart in Ruzafa with generic names.
+	a := domain.Listing{Source: "supabase", Name: "BARBER SHOP",
+		Latitude: ptr(39.4614), Longitude: ptr(-0.3719), City: "valencia"}
+	b := domain.Listing{Source: "supabase", Name: "Four Four - Barber Shop",
+		Latitude: ptr(39.4611), Longitude: ptr(-0.3715), City: "valencia"}
+	if SameBusiness(&a, &b) {
+		t.Error("distinct generic-named barbers in the same block wrongly merged")
+	}
+}
+
 func TestSameBusiness(t *testing.T) {
 	t.Parallel()
 	base := domain.Listing{

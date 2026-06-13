@@ -71,11 +71,64 @@ type Business struct {
 	OpeningHours []OpeningHours
 	Services     []ServiceOffer
 	Reviews      []Review  // freshest sample reviews per source, newest first
-	Sponsored    bool      // associated/partner business (demo: deterministic per ID)
-	Verified     bool      // identity/legitimacy confirmed (demo: deterministic per ID)
-	Sources      []string  // distinct source names, sorted
-	LastVerified time.Time // newest ScrapedAt across listings
-	Listings     []Listing // populated on detail reads only
+	Sponsored    bool       // associated/partner business (demo: deterministic per ID)
+	Verified     bool       // identity/legitimacy confirmed (demo: deterministic per ID)
+	Unknown      bool       // present only in external sources (e.g. Supabase/Google Maps), never scraped by us
+	Sources      []string   // distinct source names, sorted
+	LastVerified time.Time  // newest ScrapedAt across listings
+	Listings     []Listing  // populated on detail reads only
+	Externals    []External // external-source records (Supabase/Google Maps); detail reads only
+}
+
+// External is a business record from an external dataset (Supabase, sourced
+// from Google Maps): the business, its detail, and its price. Attached to a
+// canonical business when matched; a business seen only here is Unknown.
+type External struct {
+	Source        string  // e.g. "supabase"
+	PlaceID       string  // Google place id
+	Name          string
+	Category      string
+	Address       string
+	Neighborhood  string
+	Latitude      *float64
+	Longitude     *float64
+	GoogleRating  *float64
+	GoogleReviews int
+	PriceLevel    string // raw "$"/"$$"/"$$$" when present, else ""
+	// Estimated price band in whole-unit currency: from numeric estimates
+	// when available, else derived from PriceLevel.
+	PriceFrom *float64
+	PriceTo   *float64
+	Currency  string
+	Services  []ExternalService
+}
+
+// ExternalService is one priced service estimate from the external source.
+type ExternalService struct {
+	Name       string
+	Slug       string
+	PriceLow   *float64
+	PriceHigh  *float64
+	PriceEst   *float64
+	Confidence float64
+}
+
+// PriceLevelRange maps a Google "$"-style price level to an estimated
+// numeric band: "$" → 0–9, "$$" → 10–99, "$$$" → 100–999, "$$$$" →
+// 1000–9999. Returns ok=false for an unrecognized/empty level.
+func PriceLevelRange(level string) (from, to float64, ok bool) {
+	switch level {
+	case "$":
+		return 0, 9, true
+	case "$$":
+		return 10, 99, true
+	case "$$$":
+		return 100, 999, true
+	case "$$$$":
+		return 1000, 9999, true
+	default:
+		return 0, 0, false
+	}
 }
 
 // Stale reports whether the canonical record is older than StaleAfter.
@@ -151,12 +204,64 @@ type Facet struct {
 	Count int
 }
 
+// Demand summarizes interest in a service type within a city, using review
+// engagement as a real proxy for how sought-after businesses are. Search
+// volume itself is modeled by the caller from these real signals.
+type Demand struct {
+	City              string
+	Categories        []string
+	Businesses        int
+	TotalReviews      int
+	AvgRating         float64
+	ByCategory        []Facet      // business count per category slug
+	ReviewsByCategory []Facet      // review total per category slug
+	Neighborhoods     []DemandArea // engagement by neighborhood, reviews desc
+	Top               []DemandBiz  // most-reviewed businesses, reviews desc
+}
+
+// DemandArea is engagement aggregated for one neighborhood.
+type DemandArea struct {
+	Name       string
+	Businesses int
+	Reviews    int
+}
+
+// DemandBiz is one business ranked by review engagement.
+type DemandBiz struct {
+	ID       int64
+	Name     string
+	Category string
+	Reviews  int
+	Rating   float64
+}
+
+// Stats is an aggregate snapshot of the catalog.
+type Stats struct {
+	Total         int     // all canonical businesses
+	Unknown       int     // present only in external sources (sources == ["supabase"])
+	WithExternals int     // businesses that have at least one external record
+	Sponsored     int     // associated/partner businesses
+	Verified      int     // identity-confirmed businesses
+	WithGeo       int     // businesses with coordinates
+	WithPrice     int     // businesses with a price band
+	Rated         int     // businesses with a rating
+	AvgRating     float64 // mean rating across rated businesses
+	AvgPriceFrom  float64 // mean low price across priced businesses
+	AvgPriceTo    float64 // mean high price across priced businesses
+	BySource      []Facet // businesses whose sources include each source, count desc
+	RatingDist    []Facet // count per whole star, Value "5".."1"
+}
+
 // BusinessRepository is the persistence contract, defined at the consumer.
 type BusinessRepository interface {
 	// UpsertListing stores one source listing, resolving it to an existing
 	// canonical business (or creating one) and recomputing the merged view.
 	// Returns the canonical business ID.
 	UpsertListing(ctx context.Context, l *Listing) (int64, error)
+	// SyncExternal stores one external (Supabase/Google Maps) record,
+	// resolving it to a canonical business (or creating one) and attaching
+	// the external detail. Returns the canonical business ID.
+	SyncExternal(ctx context.Context, e *External) (int64, error)
 	// GetByID returns the full business with listings, or ErrNotFound.
 	GetByID(ctx context.Context, id int64) (*Business, error)
 	// List returns a page of businesses and the total match count.
@@ -168,4 +273,9 @@ type BusinessRepository interface {
 	// most-populated first — the data behind browse screens.
 	CategoryFacets(ctx context.Context) ([]Facet, error)
 	CityFacets(ctx context.Context) ([]Facet, error)
+	// Stats returns aggregate catalog counts.
+	Stats(ctx context.Context) (Stats, error)
+	// DemandStats aggregates review engagement for the given city and
+	// categories (the real signal behind a demand/interest view).
+	DemandStats(ctx context.Context, city string, categories []string) (Demand, error)
 }

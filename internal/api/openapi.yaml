@@ -169,6 +169,32 @@ paths:
       operationId: listCities
       responses:
         "200": { $ref: "#/components/responses/FacetList" }
+  /v1/stats:
+    get:
+      summary: Catalog statistics (unknown vs known share, by source, etc.)
+      operationId: stats
+      responses:
+        "200":
+          description: Aggregate counts and percentages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  unknown: { $ref: "#/components/schemas/CountPct" }
+                  known: { $ref: "#/components/schemas/CountPct" }
+                  with_externals: { $ref: "#/components/schemas/CountPct" }
+                  sponsored: { $ref: "#/components/schemas/CountPct" }
+                  verified: { $ref: "#/components/schemas/CountPct" }
+                  by_source:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        source: { type: string }
+                        count: { type: integer }
+                        percent: { type: number }
 components:
   securitySchemes:
     bearerAuth:
@@ -232,7 +258,7 @@ components:
     Rating:
       type: object
       properties:
-        value: { type: number }
+        value: { type: integer, minimum: 0, maximum: 5, description: "Whole stars, 0-5" }
         review_count: { type: integer }
     OpeningHours:
       type: object
@@ -255,7 +281,7 @@ components:
       properties:
         source: { type: string }
         author: { type: string }
-        rating: { type: number, nullable: true }
+        rating: { type: integer, minimum: 0, maximum: 5 }
         body: { type: string }
         date: { type: string, example: "2026-05-29" }
     SourceListing:
@@ -268,6 +294,37 @@ components:
         price_range: { type: string }
         services: { type: integer, description: "Number of services on this listing" }
         scraped_at: { type: string, format: date-time }
+    External:
+      type: object
+      description: A business record from an external dataset (Supabase / Google Maps).
+      properties:
+        source: { type: string, example: supabase }
+        place_id: { type: string }
+        name: { type: string }
+        label: { type: string }
+        address: { type: string }
+        neighborhood: { type: string }
+        location: { $ref: "#/components/schemas/Location" }
+        google_rating: { type: integer, minimum: 0, maximum: 5 }
+        google_reviews: { type: integer }
+        price_level: { type: string, description: "Google price level ($/$$/$$$) when present" }
+        price_from: { type: integer, description: "Estimated low (numeric estimates, else $-level mapping: $=0-9, $$=10-99, $$$=100-999)" }
+        price_to: { type: integer }
+        price_currency: { type: string }
+        services:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              price_low: { type: number }
+              price_high: { type: number }
+              price_estimate: { type: number }
+    CountPct:
+      type: object
+      properties:
+        count: { type: integer }
+        percent: { type: number, description: "Share of total, 1 decimal place" }
     Facet:
       type: object
       properties:
@@ -282,6 +339,7 @@ components:
           items: { type: string, enum: [booksy, treatwell, web, crawl] }
           description: "Defaults to [booksy, treatwell]"
         country: { type: string, example: es }
+        city: { type: string, example: valencia, description: "Restrict Booksy discovery to one city slug (all categories)" }
         limit: { type: integer, description: "Max businesses per source" }
         concurrency: { type: integer }
         rps: { type: number, description: "Per-host requests/second" }
@@ -316,22 +374,23 @@ components:
       properties:
         id: { type: integer, format: int64 }
         name: { type: string }
-        category: { type: string }
+        category: { type: string, description: "Raw source slug, used by the ?category= filter" }
+        label: { type: string, description: "Clean service-type label, e.g. Barbería, Uñas, Tatuajes" }
         schema_type: { type: string }
         description: { type: string }
         city: { type: string }
         address: { $ref: "#/components/schemas/Address" }
         location: { $ref: "#/components/schemas/Location" }
         rating: { $ref: "#/components/schemas/Rating" }
-        price_range: { type: string }
-        price_from: { type: number }
-        price_to: { type: number }
+        price_from: { type: integer, description: "Representative low price (whole units, interquartile-trimmed)" }
+        price_to: { type: integer, description: "Representative high price (whole units, interquartile-trimmed)" }
         price_currency: { type: string }
         distance_km: { type: number, description: "Present only on geo-filtered lists" }
         image_url: { type: string }
         logo_url: { type: string }
         sponsored: { type: boolean, description: "Associated/partner business; partners sort first in the default list (demo: deterministic per id)" }
         verified: { type: boolean, description: "Identity/legitimacy confirmed (demo: deterministic per id)" }
+        unknown: { type: boolean, description: "Present only in an external dataset (Supabase/Google Maps), never scraped by us" }
         sources: { type: array, items: { type: string } }
         last_verified: { type: string, format: date-time }
         stale: { type: boolean, description: "true when last_verified is older than 30 days" }
@@ -349,3 +408,4 @@ components:
             services: { type: array, items: { $ref: "#/components/schemas/Service" } }
             reviews: { type: array, items: { $ref: "#/components/schemas/Review" } }
             listings: { type: array, items: { $ref: "#/components/schemas/SourceListing" } }
+            externals: { type: array, items: { $ref: "#/components/schemas/External" } }

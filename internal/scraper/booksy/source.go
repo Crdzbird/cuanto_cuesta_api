@@ -11,17 +11,20 @@ import (
 
 const sourceName = "booksy"
 
-// Source scrapes booksy.com business pages for one country market.
+// Source scrapes booksy.com business pages for one country market,
+// optionally restricted to a single city.
 type Source struct {
 	fetcher *scraper.Fetcher
 	country string // sitemap country code, e.g. "es"
+	city    string // city slug filter, e.g. "valencia"; empty = whole country
 	now     func() time.Time
 }
 
-// New builds a Booksy source. Robots enforcement is handled per-host by the
-// fetcher on first contact.
-func New(fetcher *scraper.Fetcher, country string) *Source {
-	return &Source{fetcher: fetcher, country: country, now: time.Now}
+// New builds a Booksy source. city restricts discovery to one city slug when
+// non-empty. Robots enforcement is handled per-host by the fetcher on first
+// contact.
+func New(fetcher *scraper.Fetcher, country, city string) *Source {
+	return &Source{fetcher: fetcher, country: country, city: city, now: time.Now}
 }
 
 // Name implements scraper.Source.

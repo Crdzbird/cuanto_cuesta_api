@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>cuanto_cuesta · catalog dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    :root {
+      --bg:#0f1115; --panel:#181b22; --panel2:#1f232c; --text:#e6e8ee; --muted:#9aa3b2;
+      --line:#2a2f3a; --accent:#5b8cff; --known:#2dd4a7; --unknown:#f6a609;
+      --sponsored:#a78bfa; --verified:#38bdf8;
+    }
+    @media (prefers-color-scheme: light) {
+      :root { --bg:#f4f6fb; --panel:#fff; --panel2:#eef2f8; --text:#10131a; --muted:#5b6472; --line:#e3e8f0; }
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text);
+      font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+    header { display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+      padding:18px 28px; border-bottom:1px solid var(--line); position:sticky; top:0;
+      background:var(--bg); z-index:10; }
+    header h1 { font-size:18px; margin:0; font-weight:650; }
+    header .spacer { flex:1; }
+    .updated { color:var(--muted); font-size:13px; }
+    button { background:var(--accent); color:#fff; border:0; border-radius:8px;
+      padding:8px 14px; font-size:14px; font-weight:600; cursor:pointer; }
+    button.ghost { background:var(--panel2); color:var(--text); border:1px solid var(--line); }
+    input[type=search] { background:var(--panel2); color:var(--text); border:1px solid var(--line);
+      border-radius:8px; padding:8px 12px; font-size:14px; min-width:200px; }
+    .wrap { padding:22px 28px; max-width:1180px; margin:0 auto; }
+    .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px; }
+    .kpi .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.6px; }
+    .kpi .value { font-size:30px; font-weight:700; margin-top:6px; }
+    .kpi .sub { color:var(--muted); font-size:13px; margin-top:2px; }
+    .charts { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px; }
+    .charts .full { grid-column:1/-1; }
+    .card h2 { font-size:13px; font-weight:600; color:var(--muted); margin:0 0 6px;
+      text-transform:uppercase; letter-spacing:.6px; }
+    .card .hint { color:var(--muted); font-size:12px; margin:0 0 12px; }
+    .chart-box { position:relative; height:280px; }
+    .chart-box.short { height:230px; }
+    @media (max-width:780px){ .charts { grid-template-columns:1fr; } }
+    #error { display:none; color:#fff; background:#c0392b; padding:12px 16px; border-radius:10px; margin-bottom:14px; }
+    /* drill-down drawer */
+    #drawer { position:fixed; top:0; right:0; height:100%; width:min(420px,92vw);
+      background:var(--panel); border-left:1px solid var(--line); transform:translateX(100%);
+      transition:transform .25s ease; z-index:30; display:flex; flex-direction:column; }
+    #drawer.open { transform:translateX(0); box-shadow:-12px 0 40px rgba(0,0,0,.35); }
+    #drawer .dhead { display:flex; align-items:center; gap:10px; padding:18px 20px; border-bottom:1px solid var(--line); }
+    #drawer .dhead h3 { margin:0; font-size:15px; flex:1; }
+    #drawer .dlist { overflow:auto; padding:8px 0; }
+    .biz { padding:12px 20px; border-bottom:1px solid var(--line); }
+    .biz .n { font-weight:600; }
+    .biz .m { color:var(--muted); font-size:13px; margin-top:3px; display:flex; gap:10px; flex-wrap:wrap; }
+    .badge { font-size:11px; padding:2px 7px; border-radius:20px; font-weight:600; }
+    .badge.unk { background:rgba(246,166,9,.18); color:var(--unknown); }
+    .badge.spo { background:rgba(167,139,250,.18); color:var(--sponsored); }
+    .badge.ver { background:rgba(56,189,248,.18); color:var(--verified); }
+    #scrim { position:fixed; inset:0; background:rgba(0,0,0,.4); opacity:0; pointer-events:none;
+      transition:opacity .25s; z-index:20; }
+    #scrim.open { opacity:1; pointer-events:auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>cuanto_cuesta · dashboard</h1>
+    <div class="spacer"></div>
+    <input type="search" id="search" placeholder="Search businesses…" autocomplete="off">
+    <span class="updated" id="updated"></span>
+    <button class="ghost" id="autoBtn" type="button">Auto: off</button>
+    <button id="refreshBtn" type="button">Refresh</button>
+  </header>
+
+  <div class="wrap">
+    <div id="error"></div>
+
+    <section class="kpis">
+      <div class="card kpi"><div class="label">Total</div><div class="value" id="kpiTotal">–</div></div>
+      <div class="card kpi"><div class="label">Known</div><div class="value" id="kpiKnown">–</div><div class="sub" id="kpiKnownPct"></div></div>
+      <div class="card kpi"><div class="label">Unknown</div><div class="value" id="kpiUnknown">–</div><div class="sub" id="kpiUnknownPct"></div></div>
+      <div class="card kpi"><div class="label">Avg rating</div><div class="value" id="kpiRating">–</div><div class="sub">across rated</div></div>
+      <div class="card kpi"><div class="label">Avg price</div><div class="value" id="kpiPrice">–</div><div class="sub">representative band</div></div>
+      <div class="card kpi"><div class="label">Sources</div><div class="value" id="kpiSources">–</div></div>
+    </section>
+
+    <section class="charts">
+      <div class="card">
+        <h2>Known vs Unknown</h2>
+        <p class="hint">Unknown = present only in Supabase/Google Maps</p>
+        <div class="chart-box"><canvas id="knownChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Coverage</h2>
+        <p class="hint">share of the catalog with each attribute</p>
+        <div class="chart-box"><canvas id="attrChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>By source</h2>
+        <p class="hint">a matched business counts under several</p>
+        <div class="chart-box"><canvas id="sourceChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Rating distribution</h2>
+        <p class="hint">businesses per whole star</p>
+        <div class="chart-box"><canvas id="ratingChart"></canvas></div>
+      </div>
+      <div class="card full">
+        <h2>By category</h2>
+        <p class="hint">click a bar to list those businesses</p>
+        <div class="chart-box"><canvas id="categoryChart"></canvas></div>
+      </div>
+      <div class="card full">
+        <h2>Top cities</h2>
+        <p class="hint">click a bar to list those businesses</p>
+        <div class="chart-box"><canvas id="cityChart"></canvas></div>
+      </div>
+    </section>
+  </div>
+
+  <div id="scrim"></div>
+  <aside id="drawer">
+    <div class="dhead"><h3 id="drawerTitle">Businesses</h3><button class="ghost" id="drawerClose" type="button">Close</button></div>
+    <div class="dlist" id="drawerList"></div>
+  </aside>
+
+  <script>
+    const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+    const $ = (id) => document.getElementById(id);
+    const charts = {};
+    let autoTimer = null, countdown = 0;
+    const H = { 'ngrok-skip-browser-warning': '1' };
+
+    function palette(n) {
+      const base = ['#5b8cff','#2dd4a7','#f6a609','#a78bfa','#38bdf8','#fb7185','#34d399','#fbbf24','#c084fc','#f472b6','#4ade80','#22d3ee'];
+      return Array.from({length:n}, (_, i) => base[i % base.length]);
+    }
+    function animateNum(el, to, suffix='') {
+      const from = parseFloat(el.dataset.v || '0') || 0; el.dataset.v = to;
+      const start = performance.now(), dur = 500;
+      function step(t){ const k = Math.min(1,(t-start)/dur); const val = from+(to-from)*(1-Math.pow(1-k,3));
+        el.textContent = (Number.isInteger(to)?Math.round(val):val.toFixed(1))+suffix; if(k<1) requestAnimationFrame(step); }
+      requestAnimationFrame(step);
+    }
+    function baseOpts(extra={}) {
+      return { responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ labels:{ color:css('--text') } } }, ...extra };
+    }
+    function axes() {
+      return { x:{ ticks:{color:css('--muted')}, grid:{color:css('--line')} },
+               y:{ ticks:{color:css('--muted')}, grid:{color:css('--line')}, beginAtZero:true } };
+    }
+    function upsert(key, ctxId, cfg) {
+      if (charts[key]) { charts[key].data = cfg.data; charts[key].options = cfg.options; charts[key].update(); }
+      else charts[key] = new Chart($(ctxId), cfg);
+    }
+
+    async function load() {
+      try {
+        const res = await fetch('/v1/stats', { headers:H });
+        if (!res.ok) throw new Error('HTTP '+res.status);
+        render(await res.json());
+        $('error').style.display='none';
+        $('updated').textContent = 'Updated '+new Date().toLocaleTimeString();
+      } catch(e) {
+        $('error').textContent = 'Could not load /v1/stats: '+e.message;
+        $('error').style.display='block';
+      }
+    }
+
+    function render(s) {
+      animateNum($('kpiTotal'), s.total);
+      animateNum($('kpiKnown'), s.known.count);
+      $('kpiKnownPct').textContent = s.known.percent+'%';
+      animateNum($('kpiUnknown'), s.unknown.count);
+      $('kpiUnknownPct').textContent = s.unknown.percent+'%';
+      animateNum($('kpiRating'), s.avg_rating, '★');
+      $('kpiPrice').textContent = s.avg_price.from+'–'+s.avg_price.to+' €';
+      animateNum($('kpiSources'), (s.by_source||[]).length);
+
+      // Known vs Unknown doughnut
+      upsert('known','knownChart',{ type:'doughnut',
+        data:{ labels:['Known ('+s.known.percent+'%)','Unknown ('+s.unknown.percent+'%)'],
+          datasets:[{ data:[s.known.count,s.unknown.count],
+            backgroundColor:[css('--known'),css('--unknown')], borderWidth:0 }] },
+        options: baseOpts({ cutout:'62%' }) });
+
+      // Coverage horizontal bar
+      const cov = [['Unknown',s.unknown.percent,css('--unknown')],
+        ['With externals',s.with_externals.percent,css('--accent')],
+        ['With price',s.with_price.percent,css('--known')],
+        ['With geo',s.with_geo.percent,'#34d399'],
+        ['Sponsored',s.sponsored.percent,css('--sponsored')],
+        ['Verified',s.verified.percent,css('--verified')]];
+      upsert('attr','attrChart',{ type:'bar',
+        data:{ labels:cov.map(c=>c[0]), datasets:[{ data:cov.map(c=>c[1]),
+          backgroundColor:cov.map(c=>c[2]), borderRadius:6 }] },
+        options: baseOpts({ indexAxis:'y', plugins:{legend:{display:false},
+          tooltip:{callbacks:{label:c=>c.raw+'%'}}},
+          scales:{ x:{suggestedMax:100,ticks:{color:css('--muted'),callback:v=>v+'%'},grid:{color:css('--line')}},
+                   y:{ticks:{color:css('--muted')},grid:{display:false}} } }) });
+
+      // By source bar
+      const src = s.by_source||[];
+      upsert('source','sourceChart',{ type:'bar',
+        data:{ labels:src.map(x=>x.source), datasets:[{ data:src.map(x=>x.count),
+          backgroundColor:palette(src.length), borderRadius:6 }] },
+        options: baseOpts({ plugins:{legend:{display:false},
+          tooltip:{callbacks:{label:c=>c.raw+' ('+src[c.dataIndex].percent+'%)'}}}, scales:axes() }) });
+
+      // Rating distribution bar (5..1)
+      const rd = s.rating_distribution||[];
+      upsert('rating','ratingChart',{ type:'bar',
+        data:{ labels:rd.map(x=>x.stars+'★'), datasets:[{ data:rd.map(x=>x.count),
+          backgroundColor:'#fbbf24', borderRadius:6 }] },
+        options: baseOpts({ plugins:{legend:{display:false}}, scales:axes() }) });
+
+      // By category — clickable
+      const cat = s.by_category||[];
+      upsert('category','categoryChart',{ type:'bar',
+        data:{ labels:cat.map(x=>x.label), datasets:[{ data:cat.map(x=>x.count),
+          backgroundColor:palette(cat.length), borderRadius:6 }] },
+        options: baseOpts({ plugins:{legend:{display:false},
+          tooltip:{callbacks:{label:c=>c.raw+' ('+cat[c.dataIndex].percent+'%)'}}}, scales:axes(),
+          onClick:(e,els)=>{ if(els.length) drill('category', cat[els[0].index].value, cat[els[0].index].label); } }) });
+      $('categoryChart').style.cursor='pointer';
+
+      // Top cities — clickable
+      const city = s.by_city||[];
+      upsert('city','cityChart',{ type:'bar',
+        data:{ labels:city.map(x=>x.value), datasets:[{ data:city.map(x=>x.count),
+          backgroundColor:palette(city.length), borderRadius:6 }] },
+        options: baseOpts({ plugins:{legend:{display:false},
+          tooltip:{callbacks:{label:c=>c.raw+' ('+city[c.dataIndex].percent+'%)'}}}, scales:axes(),
+          onClick:(e,els)=>{ if(els.length) drill('city', city[els[0].index].value, city[els[0].index].value); } }) });
+      $('cityChart').style.cursor='pointer';
+    }
+
+    // ---- drill-down drawer ----
+    async function drill(kind, value, label) {
+      openDrawer(label+' · loading…');
+      try {
+        const res = await fetch('/v1/businesses?'+kind+'='+encodeURIComponent(value)+'&limit=50', { headers:H });
+        const d = await res.json();
+        renderList(label+' ('+d.total+')', d.items);
+      } catch(e) { renderList('Error', []); }
+    }
+    async function searchBiz(q) {
+      if (!q) { closeDrawer(); return; }
+      openDrawer('Search “'+q+'” · loading…');
+      try {
+        const res = await fetch('/v1/businesses?q='+encodeURIComponent(q)+'&limit=50', { headers:H });
+        const d = await res.json();
+        renderList('“'+q+'” ('+d.total+')', d.items);
+      } catch(e) { renderList('Error', []); }
+    }
+    function renderList(title, items) {
+      $('drawerTitle').textContent = title;
+      $('drawerList').innerHTML = items.map(i => {
+        const price = (i.price_from!=null) ? `${i.price_from}–${i.price_to} ${i.price_currency||''}` : '';
+        const rating = i.rating ? `${i.rating.value}★` : '';
+        const badges = [i.unknown?'<span class="badge unk">unknown</span>':'',
+          i.sponsored?'<span class="badge spo">sponsor</span>':'',
+          i.verified?'<span class="badge ver">verified</span>':''].join('');
+        return `<div class="biz"><div class="n">${esc(i.name)} ${badges}</div>
+          <div class="m"><span>${esc(i.label||i.category||'')}</span>
+          ${i.city?`<span>📍 ${esc(i.city)}</span>`:''}${rating?`<span>${rating}</span>`:''}
+          ${price?`<span>${price}</span>`:''}<span>${(i.sources||[]).join(', ')}</span></div></div>`;
+      }).join('') || '<div class="biz">No results.</div>';
+    }
+    function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+    function openDrawer(t){ $('drawerTitle').textContent=t; $('drawer').classList.add('open'); $('scrim').classList.add('open'); }
+    function closeDrawer(){ $('drawer').classList.remove('open'); $('scrim').classList.remove('open'); }
+
+    // ---- controls ----
+    $('refreshBtn').addEventListener('click', load);
+    $('drawerClose').addEventListener('click', closeDrawer);
+    $('scrim').addEventListener('click', closeDrawer);
+    $('autoBtn').addEventListener('click', (e) => {
+      if (autoTimer) { clearInterval(autoTimer); autoTimer=null; e.target.textContent='Auto: off'; }
+      else {
+        countdown = 15;
+        autoTimer = setInterval(() => { countdown--; if (countdown<=0) { load(); countdown=15; }
+          e.target.textContent = 'Auto: '+countdown+'s'; }, 1000);
+        load();
+      }
+    });
+    let st; const search = $('search');
+    search.addEventListener('input', () => { clearTimeout(st); st = setTimeout(() => searchBiz(search.value.trim()), 300); });
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeDrawer(); });
+
+    load();
+  </script>
+</body>
+</html>

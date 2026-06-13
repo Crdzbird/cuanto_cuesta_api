@@ -121,6 +121,42 @@ func TestMergeListingsKeepsSourcePriceRange(t *testing.T) {
 	}
 }
 
+func TestPriceSummaryTrimsOutliers(t *testing.T) {
+	t.Parallel()
+	// A menu of mostly 15–45 services with one cheap and one 300 outlier.
+	svcs := []ServiceOffer{
+		{Name: "a", Price: ptr(3), Currency: "EUR"},
+		{Name: "b", Price: ptr(15), Currency: "EUR"},
+		{Name: "c", Price: ptr(20), Currency: "EUR"},
+		{Name: "d", Price: ptr(25), Currency: "EUR"},
+		{Name: "e", Price: ptr(30), Currency: "EUR"},
+		{Name: "f", Price: ptr(35), Currency: "EUR"},
+		{Name: "g", Price: ptr(40), Currency: "EUR"},
+		{Name: "h", Price: ptr(45), Currency: "EUR"},
+		{Name: "i", Price: ptr(50), Currency: "EUR"},
+		{Name: "j", Price: ptr(300), Currency: "EUR"}, // bono/package outlier
+	}
+	from, to, cur := priceSummary(svcs)
+	// 10 prices → interquartile band (index 2..7) is 20..45, not 3..300.
+	if from == nil || *from != 20 || to == nil || *to != 45 {
+		t.Errorf("trimmed band = %v..%v, want 20..45", from, to)
+	}
+	if cur != "EUR" {
+		t.Errorf("currency = %q, want EUR", cur)
+	}
+}
+
+func TestPriceSummaryRounds(t *testing.T) {
+	t.Parallel()
+	from, to, _ := priceSummary([]ServiceOffer{
+		{Name: "a", Price: ptr(19.99), Currency: "EUR"},
+		{Name: "b", Price: ptr(24.50), Currency: "EUR"},
+	})
+	if *from != 20 || *to != 25 { // <5 services: no trim, just round
+		t.Errorf("rounded band = %v..%v, want 20..25", *from, *to)
+	}
+}
+
 func TestPriceSummaryMixedCurrencies(t *testing.T) {
 	t.Parallel()
 	from, to, cur := priceSummary([]ServiceOffer{

@@ -33,19 +33,45 @@ func NewServer(addr string, repo domain.BusinessRepository, logger *slog.Logger,
 	mux.HandleFunc("GET /v1/businesses/{id}/reviews", h.getBusinessReviews)
 	mux.HandleFunc("GET /v1/categories", h.listCategories)
 	mux.HandleFunc("GET /v1/cities", h.listCities)
+	mux.HandleFunc("GET /v1/stats", h.stats)
+	mux.HandleFunc("GET /v1/demand", h.demand)
 	mux.HandleFunc("POST /v1/admin/scrape", h.startScrape)
 	mux.HandleFunc("GET /v1/admin/scrape", h.scrapeStatus)
 	mux.HandleFunc("GET /openapi.yaml", h.openapiYAML)
 	mux.HandleFunc("GET /docs", h.docs)
+	mux.HandleFunc("GET /dashboard", h.dashboard)
+	mux.HandleFunc("GET /demand", h.demandPage)
 
 	return &http.Server{
 		Addr:              addr,
-		Handler:           requestLog(logger, mux),
+		Handler:           requestLog(logger, cors(mux)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
+}
+
+// cors allows the API to be called from any browser origin without
+// restriction. Safe here because reads are public and the only mutating
+// endpoint (scrape) is independently bearer-protected — CORS never bypasses
+// that token. Credentials are not allowed (incompatible with Origin "*"),
+// which is fine since auth travels in the Authorization header, not cookies.
+func cors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("Access-Control-Allow-Origin", "*")
+		h.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-None-Match, If-Modified-Since")
+		h.Set("Access-Control-Expose-Headers", "ETag, Last-Modified")
+		h.Set("Access-Control-Max-Age", "86400")
+		// Preflight: the method-based mux has no OPTIONS routes, so answer here.
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // requestLog logs method, path, status and latency for every request.

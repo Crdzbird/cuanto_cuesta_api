@@ -17,6 +17,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/crdzbird/cuanto_cuesta/internal/domain"
+	"github.com/crdzbird/cuanto_cuesta/internal/external/supabase"
 	"github.com/crdzbird/cuanto_cuesta/internal/scraper"
 	"github.com/crdzbird/cuanto_cuesta/internal/scraper/booksy"
 	"github.com/crdzbird/cuanto_cuesta/internal/scraper/crawl"
@@ -32,6 +33,7 @@ const UserAgent = "cuanto-cuesta-prototype/0.2 (personal MVP crawler; +mailto:lu
 type Options struct {
 	Sources          []string      // booksy, treatwell, web, crawl
 	Country          string        // Booksy sitemap country code
+	City             string        // optional city slug filter (Booksy), e.g. "valencia"
 	Limit            int           // max businesses per source
 	Concurrency      int           // concurrent fetchers
 	RPS              float64       // per-host requests/second budget
@@ -40,6 +42,10 @@ type Options struct {
 	CrawlDepth       int
 	MaxPages         int
 	PerHostCap       int
+
+	// Supabase (external "googlemaps" dataset) — used by the "supabase" source.
+	SupabaseURL string
+	SupabaseKey string
 }
 
 func (o Options) withDefaults() Options {
@@ -72,7 +78,7 @@ type Result struct {
 }
 
 // validSources guards against typos before any network work begins.
-var validSources = map[string]bool{"booksy": true, "treatwell": true, "web": true, "crawl": true}
+var validSources = map[string]bool{"booksy": true, "treatwell": true, "web": true, "crawl": true, "supabase": true}
 
 // Run executes one ingest according to opts, writing to repo. It is safe to
 // cancel via ctx. Returns aggregated counts.
@@ -99,11 +105,17 @@ func Run(ctx context.Context, repo domain.BusinessRepository, opts Options, logg
 				return res, fmt.Errorf("crawl: %w", err)
 			}
 			res.record("crawl", sr)
+		case "supabase":
+			sr, err := runSupabase(ctx, repo, opts, logger)
+			if err != nil {
+				return res, fmt.Errorf("supabase: %w", err)
+			}
+			res.record("supabase", sr)
 		default:
 			var src scraper.Source
 			switch name {
 			case "booksy":
-				src = booksy.New(fetcher, opts.Country)
+				src = booksy.New(fetcher, opts.Country, opts.City)
 			case "treatwell":
 				src = treatwell.New(fetcher)
 			case "web":
@@ -232,6 +244,37 @@ func runCrawler(ctx context.Context, repo domain.BusinessRepository, fetcher *sc
 	logger.Info("crawl complete", "source", "crawl",
 		"pages", stats.PagesFetched, "failures", stats.FetchFailures, "businesses", stats.Businesses)
 	return SourceResult{Saved: stats.Businesses, Failed: stats.FetchFailures}, nil
+}
+
+// runSupabase pulls the external (Google Maps) dataset from Supabase and
+// syncs each record: entity-resolved into the catalog with its external
+// detail attached. Businesses found only here are flagged Unknown downstream.
+func runSupabase(ctx context.Context, repo domain.BusinessRepository, opts Options, logger *slog.Logger) (SourceResult, error) {
+	if opts.SupabaseURL == "" || opts.SupabaseKey == "" {
+		return SourceResult{}, errors.New("source 'supabase' requires SupabaseURL and SupabaseKey")
+	}
+	client := supabase.New(opts.SupabaseURL, opts.SupabaseKey)
+	externals, err := client.FetchExternals(ctx, opts.Limit)
+	if err != nil {
+		return SourceResult{}, err
+	}
+	logger.Info("fetched externals", "source", "supabase", "count", len(externals))
+
+	var sr SourceResult
+	for i := range externals {
+		if err := ctx.Err(); err != nil {
+			return sr, err
+		}
+		businessID, err := repo.SyncExternal(ctx, &externals[i])
+		if err != nil {
+			sr.Failed++
+			logger.Warn("sync external failed", "name", externals[i].Name, "err", err)
+			continue
+		}
+		sr.Saved++
+		logger.Info("synced external", "source", "supabase", "business_id", businessID, "name", externals[i].Name)
+	}
+	return sr, nil
 }
 
 // SourceList parses a comma-separated source string into a clean slice.

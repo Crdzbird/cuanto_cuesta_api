@@ -64,6 +64,9 @@ func scanBusiness(row rowScanner) (*domain.Business, error) {
 	if t, err := time.Parse(time.RFC3339, lastVerified); err == nil {
 		b.LastVerified = t
 	}
+	// "Unknown": we only know this business from an external dataset
+	// (Supabase/Google Maps) — we never scraped it ourselves.
+	b.Unknown = len(b.Sources) == 1 && b.Sources[0] == "supabase"
 	return &b, nil
 }
 

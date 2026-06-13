@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"math"
 	"slices"
 	"sort"
 	"strconv"
@@ -123,22 +124,18 @@ func collectReviews(newestFirst []Listing) []Review {
 	return out
 }
 
-// priceSummary derives the cheapest/priciest service for list-card UX.
-// A currency is reported only when the services agree on one.
+// priceSummary derives a short, representative price band for list-card UX.
+// Service menus often include a few outliers (multi-session bonos, premium
+// add-ons) that blow the raw min–max out to something like 10–300; that's
+// noise, not a useful "how much does it cost". So we trim ~10% off each end
+// (when there are enough services) and round to whole units, yielding a tight
+// band like 15–45. A currency is reported only when services agree on one.
 func priceSummary(services []ServiceOffer) (from, to *float64, currency string) {
+	var prices []float64
 	mixed := false
 	for _, svc := range services {
-		if svc.Price == nil {
-			continue
-		}
-		p := *svc.Price
-		if from == nil || p < *from {
-			v := p
-			from = &v
-		}
-		if to == nil || p > *to {
-			v := p
-			to = &v
+		if svc.Price != nil {
+			prices = append(prices, *svc.Price)
 		}
 		if svc.Currency != "" {
 			switch {
@@ -150,7 +147,23 @@ func priceSummary(services []ServiceOffer) (from, to *float64, currency string) 
 			}
 		}
 	}
-	return from, to, currency
+	if len(prices) == 0 {
+		return nil, nil, currency
+	}
+	sort.Float64s(prices)
+	lo, hi := 0, len(prices)-1
+	if len(prices) >= 4 {
+		// Interquartile band (middle 50%): collapses outlier-driven spans
+		// like 3–2100 to the typical cost, e.g. 20–45.
+		lo = len(prices) / 4
+		hi = len(prices) * 3 / 4
+		if hi > len(prices)-1 {
+			hi = len(prices) - 1
+		}
+	}
+	f := math.Round(prices[lo])
+	t := math.Round(prices[hi])
+	return &f, &t, currency
 }
 
 // aggregateRating combines the newest rated listing of each source into a

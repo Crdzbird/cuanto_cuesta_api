@@ -28,7 +28,11 @@ type urlSet struct {
 }
 
 // DiscoverURLs returns up to limit business page URLs for s.country, walking
-// sitemap_business_* files from the sitemap index in order.
+// sitemap_business_* files from the sitemap index in order. When s.city is
+// set, only businesses in that city are returned — Booksy encodes the city
+// slug as the final segment of every business URL
+// (".../<id>_<name>_<category>_<cityid>_<cityslug>"), so the filter is exact
+// and naturally spans every category (barbería, peluquería, salón…).
 func (s *Source) DiscoverURLs(ctx context.Context, limit int) ([]string, error) {
 	body, err := s.fetcher.Get(ctx, siteRoot+"/sitemap/sitemap_index.xml")
 	if err != nil {
@@ -60,10 +64,21 @@ func (s *Source) DiscoverURLs(ctx context.Context, limit int) ([]string, error) 
 			if len(urls) >= limit {
 				break
 			}
-			if u.Loc != "" {
-				urls = append(urls, u.Loc)
+			if u.Loc == "" || !cityMatches(u.Loc, s.city) {
+				continue
 			}
+			urls = append(urls, u.Loc)
 		}
 	}
 	return urls, nil
+}
+
+// cityMatches reports whether a Booksy business URL belongs to city (its
+// final slug segment). The leading underscore anchors the match to a whole
+// segment, so "valencia" does not match a town like "nueva-valencia".
+func cityMatches(loc, city string) bool {
+	if city == "" {
+		return true
+	}
+	return strings.HasSuffix(loc, "_"+city)
 }

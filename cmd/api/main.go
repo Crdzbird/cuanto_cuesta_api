@@ -53,12 +53,16 @@ func run() error {
 
 	cfg := api.Config{ScrapeToken: *token}
 	if *token != "" {
+		// Supabase credentials come from the server env, never the request
+		// body — secrets must not travel over the public API.
+		sbURL, sbKey := os.Getenv("SUPABASE_URL"), os.Getenv("SUPABASE_KEY")
 		// The runner uses a detached context so a scrape survives the request;
 		// the run itself is bounded by its page/host budgets.
 		cfg.ScrapeRunner = func(rctx context.Context, opts ingest.Options) (ingest.Result, error) {
+			opts.SupabaseURL, opts.SupabaseKey = sbURL, sbKey
 			return ingest.Run(rctx, repo, opts, logger)
 		}
-		logger.Info("scrape admin endpoints enabled")
+		logger.Info("scrape admin endpoints enabled", "supabase_configured", sbURL != "" && sbKey != "")
 	} else {
 		logger.Warn("scrape admin endpoints disabled (no -scrape-token)")
 	}

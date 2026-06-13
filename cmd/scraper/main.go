@@ -32,6 +32,7 @@ func run() error {
 		dbPath      = flag.String("db", "cuanto_cuesta.db", "SQLite database path")
 		sourcesFlag = flag.String("sources", "booksy,treatwell", "comma-separated sources: booksy, treatwell, web, crawl")
 		country     = flag.String("country", "es", "Booksy sitemap country code")
+		city        = flag.String("city", "", "restrict Booksy discovery to one city slug, e.g. valencia (empty = whole country)")
 		urlsFile    = flag.String("urls", "", "seed URL file for the 'web'/'crawl' sources (one URL per line)")
 		limit       = flag.Int("limit", 25, "max businesses to crawl per source this run")
 		concurrency = flag.Int("concurrency", 2, "concurrent page fetchers per source")
@@ -41,6 +42,9 @@ func run() error {
 		maxPages    = flag.Int("max-pages", 50, "overall page budget for the 'crawl' source")
 		perHostCap  = flag.Int("per-host-cap", 25, "max pages per host for the 'crawl' source")
 		renormalize = flag.Bool("renormalize", false, "recompute all stored businesses with current rules (city normalization) and exit")
+		reresolve   = flag.Bool("reresolve", false, "rebuild canonical businesses from stored listings/externals with the current matcher (repairs groupings) and exit")
+		supabaseURL = flag.String("supabase-url", os.Getenv("SUPABASE_URL"), "Supabase project URL for the 'supabase' source")
+		supabaseKey = flag.String("supabase-key", os.Getenv("SUPABASE_KEY"), "Supabase API key for the 'supabase' source")
 	)
 	flag.Parse()
 
@@ -63,9 +67,19 @@ func run() error {
 		return nil
 	}
 
+	if *reresolve {
+		n, err := repo.Reresolve(ctx)
+		if err != nil {
+			return fmt.Errorf("reresolve: %w", err)
+		}
+		logger.Info("reresolved businesses", "count", n)
+		return nil
+	}
+
 	opts := ingest.Options{
 		Sources:          ingest.SourceList(*sourcesFlag),
 		Country:          *country,
+		City:             *city,
 		Limit:            *limit,
 		Concurrency:      *concurrency,
 		RPS:              *rps,
@@ -73,6 +87,8 @@ func run() error {
 		CrawlDepth:       *crawlDepth,
 		MaxPages:         *maxPages,
 		PerHostCap:       *perHostCap,
+		SupabaseURL:      *supabaseURL,
+		SupabaseKey:      *supabaseKey,
 	}
 	if needsSeeds(opts.Sources) {
 		seeds, err := readSeedURLs(*urlsFile)

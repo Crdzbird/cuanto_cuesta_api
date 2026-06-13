@@ -19,13 +19,31 @@ import (
 // costs a duplicate row.
 const (
 	// maxGeoDistanceKm is how far apart two coordinate pairs may be and
-	// still describe the same venue (GPS + geocoding slack).
-	maxGeoDistanceKm = 0.3
+	// still describe the same venue (GPS + geocoding slack). Kept tight
+	// because dense areas (e.g. Ruzafa) pack many similar venues per block.
+	maxGeoDistanceKm = 0.15
 	// simWithGeo is the name-similarity floor when coordinates agree.
 	simWithGeo = 0.5
 	// simWithoutGeo is the floor when only city/postal code agree.
 	simWithoutGeo = 0.85
 )
+
+// nameStopwords are generic business-type, descriptor, and location words
+// that carry no identity. Without removing them, names like "Barber Shop" and
+// "Four Four Barber Shop" score as the same venue and false-merge. Folded
+// (lowercase, no diacritics) to match nameTokens output.
+var nameStopwords = map[string]bool{
+	"barber": true, "barberia": true, "barbershop": true, "barbers": true,
+	"shop": true, "peluqueria": true, "peluqueros": true, "salon": true,
+	"beauty": true, "hair": true, "hairdresser": true, "studio": true,
+	"estudio": true, "nails": true, "nail": true, "unas": true, "spa": true,
+	"centro": true, "estetica": true, "clinica": true, "club": true,
+	"lowcost": true, "low": true, "cost": true, "men": true, "mens": true,
+	"man": true, "woman": true, "mujer": true, "hombre": true, "atelier": true,
+	"y": true, "de": true, "del": true, "la": true, "el": true, "los": true,
+	"las": true, "en": true, "tu": true, "by": true, "the": true, "and": true,
+	"valencia": true, "ruzafa": true, "russafa": true, "grooming": true,
+}
 
 // Fold lowercases s and removes diacritics ("Salón YöY" → "salon yoy").
 // CONCURRENCY-CRITICAL: transform.Chain transformers carry internal state
@@ -190,13 +208,18 @@ func NormalizeCity(city string) string {
 	return Slugify(city)
 }
 
-// nameTokens normalizes a business name into a token set.
+// nameTokens normalizes a business name into its set of distinctive tokens,
+// dropping generic stopwords and single characters so only identity-bearing
+// words remain.
 func nameTokens(name string) map[string]bool {
 	folded := Fold(name)
 	tokens := map[string]bool{}
 	for _, tok := range strings.FieldsFunc(folded, func(r rune) bool {
 		return (r < 'a' || r > 'z') && (r < '0' || r > '9')
 	}) {
+		if len(tok) < 2 || nameStopwords[tok] {
+			continue
+		}
 		tokens[tok] = true
 	}
 	return tokens
@@ -204,7 +227,9 @@ func nameTokens(name string) map[string]bool {
 
 // NameSimilarity scores two business names in [0,1]: the larger of Jaccard
 // overlap and containment (containment catches "Forbici" vs "Forbici Men's
-// Grooming Atelier" — same business, shorter name on one source).
+// Grooming Atelier" — same business, shorter name on one source). Names that
+// reduce to no distinctive tokens (e.g. "Barber Shop") score 0 — we won't
+// merge venues on generic words alone.
 func NameSimilarity(a, b string) float64 {
 	ta, tb := nameTokens(a), nameTokens(b)
 	if len(ta) == 0 || len(tb) == 0 {
