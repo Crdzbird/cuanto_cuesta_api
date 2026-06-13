@@ -5,6 +5,7 @@ package domain
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -30,6 +31,11 @@ type Listing struct {
 	Latitude     *float64
 	Longitude    *float64
 	PriceRange   string // raw source string, e.g. "EUR 5 - 35"
+	// PriceFrom/PriceTo carry a price band when the source gives one without
+	// itemized services (e.g. a Yelp price level mapped to a range).
+	PriceFrom     *float64
+	PriceTo       *float64
+	PriceCurrency string
 	Rating       *Rating
 	Phone        string
 	Email        string
@@ -100,6 +106,8 @@ type External struct {
 	PriceFrom *float64
 	PriceTo   *float64
 	Currency  string
+	ImageURL  string   // primary photo (direct URL)
+	Images    []string // all photos (direct URLs)
 	Services  []ExternalService
 }
 
@@ -113,22 +121,72 @@ type ExternalService struct {
 	Confidence float64
 }
 
-// PriceLevelRange maps a Google "$"-style price level to an estimated
-// numeric band: "$" → 0–9, "$$" → 10–99, "$$$" → 100–999, "$$$$" →
-// 1000–9999. Returns ok=false for an unrecognized/empty level.
+// PriceLevelRange maps a symbolic price level to an estimated numeric band by
+// the count of currency symbols: 1 → 0–9, 2 → 10–99, 3 → 100–999, 4 →
+// 1000–9999. Symbol-agnostic ($/€/£/¥) since sources localize it (Yelp ES
+// returns "€€"). Non-price strings ("", "free") return ok=false.
 func PriceLevelRange(level string) (from, to float64, ok bool) {
-	switch level {
-	case "$":
+	level = strings.TrimSpace(level)
+	if level == "" {
+		return 0, 0, false
+	}
+	for _, r := range level {
+		if !strings.ContainsRune("$€£¥", r) {
+			return 0, 0, false
+		}
+	}
+	switch len([]rune(level)) {
+	case 1:
 		return 0, 9, true
-	case "$$":
+	case 2:
 		return 10, 99, true
-	case "$$$":
+	case 3:
 		return 100, 999, true
-	case "$$$$":
+	case 4:
 		return 1000, 9999, true
 	default:
 		return 0, 0, false
 	}
+}
+
+// Verticals partition the catalog into independent business domains served by
+// separate endpoints/dashboards.
+const (
+	VerticalGrooming = "grooming" // barbers, hair & beauty salons, nails…
+	VerticalServices = "services" // vets, dry-cleaning & laundry
+)
+
+// categoryVertical maps a category slug to its vertical.
+var categoryVertical = map[string]string{
+	"barberia": VerticalGrooming, "peluqueria": VerticalGrooming,
+	"salon-de-unas": VerticalGrooming, "cejas-y-pestanas": VerticalGrooming,
+	"masajes": VerticalGrooming, "spa": VerticalGrooming,
+	"cuidado-de-la-piel": VerticalGrooming, "depilacion": VerticalGrooming,
+	"medicina-estetica": VerticalGrooming, "tienda-de-tatuajes": VerticalGrooming,
+	"servicios-profesionales": VerticalGrooming, "otro": VerticalGrooming,
+	"veterinario": VerticalServices, "veterinaria": VerticalServices,
+	"tintoreria": VerticalServices, "lavanderia": VerticalServices,
+}
+
+// VerticalOf returns the vertical for a category slug, or "" if unknown.
+func VerticalOf(category string) string { return categoryVertical[category] }
+
+// externalSources are non-scraped, API-imported datasets. A business known
+// only through these (never via our own crawlers) is "unknown".
+var externalSources = map[string]bool{"supabase": true, "yelp": true}
+
+// OnlyExternalSources reports whether every source is an external dataset
+// (so we have no first-hand scraped record of the business).
+func OnlyExternalSources(sources []string) bool {
+	if len(sources) == 0 {
+		return false
+	}
+	for _, s := range sources {
+		if !externalSources[s] {
+			return false
+		}
+	}
+	return true
 }
 
 // Stale reports whether the canonical record is older than StaleAfter.
@@ -187,6 +245,7 @@ type ListFilter struct {
 	City      string
 	Query     string // case-insensitive substring on name
 	MinRating float64
+	Vertical  string // "grooming" | "services" | "" (all)
 	Geo       *GeoFilter
 	Limit     int
 	Offset    int
@@ -270,11 +329,12 @@ type BusinessRepository interface {
 	// for refresh crawls.
 	ListStaleListings(ctx context.Context, source string, cutoff time.Time, limit int) ([]Listing, error)
 	// CategoryFacets and CityFacets list distinct values with counts,
-	// most-populated first — the data behind browse screens.
-	CategoryFacets(ctx context.Context) ([]Facet, error)
-	CityFacets(ctx context.Context) ([]Facet, error)
-	// Stats returns aggregate catalog counts.
-	Stats(ctx context.Context) (Stats, error)
+	// most-populated first — the data behind browse screens. vertical ""
+	// spans the whole catalog.
+	CategoryFacets(ctx context.Context, vertical string) ([]Facet, error)
+	CityFacets(ctx context.Context, vertical string) ([]Facet, error)
+	// Stats returns aggregate catalog counts for a vertical ("" = all).
+	Stats(ctx context.Context, vertical string) (Stats, error)
 	// DemandStats aggregates review engagement for the given city and
 	// categories (the real signal behind a demand/interest view).
 	DemandStats(ctx context.Context, city string, categories []string) (Demand, error)

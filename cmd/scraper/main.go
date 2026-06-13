@@ -45,6 +45,13 @@ func run() error {
 		reresolve   = flag.Bool("reresolve", false, "rebuild canonical businesses from stored listings/externals with the current matcher (repairs groupings) and exit")
 		supabaseURL = flag.String("supabase-url", os.Getenv("SUPABASE_URL"), "Supabase project URL for the 'supabase' source")
 		supabaseKey = flag.String("supabase-key", os.Getenv("SUPABASE_KEY"), "Supabase API key for the 'supabase' source")
+		yelpKey     = flag.String("yelp-key", os.Getenv("YELP_API_KEY"), "Yelp Fusion API key for the 'yelp' source")
+		yelpLoc     = flag.String("yelp-location", "Valencia, Spain", "Yelp Fusion location for the 'yelp' source")
+		yelpCats    = flag.String("yelp-categories", "vet,drycleaning,laundryservices", "Yelp Fusion category aliases")
+		yelpPhotos  = flag.Bool("yelp-detail-photos", true, "fetch up to 3 photos per Yelp business (one extra API call each)")
+		fsqKey      = flag.String("foursquare-key", os.Getenv("FOURSQUARE_API_KEY"), "Foursquare Places service key for the 'foursquare' source")
+		fsqLoc      = flag.String("foursquare-location", "Valencia, Spain", "Foursquare 'near' location")
+		fsqQueries  = flag.String("foursquare-queries", "veterinario,tintorería,lavandería", "Foursquare search queries")
 	)
 	flag.Parse()
 
@@ -89,6 +96,13 @@ func run() error {
 		PerHostCap:       *perHostCap,
 		SupabaseURL:      *supabaseURL,
 		SupabaseKey:      *supabaseKey,
+		YelpKey:            *yelpKey,
+		YelpLocation:       *yelpLoc,
+		YelpCategories:     ingest.SourceList(*yelpCats),
+		YelpDetailPhotos:   *yelpPhotos,
+		FoursquareKey:      *fsqKey,
+		FoursquareLocation: *fsqLoc,
+		FoursquareQueries:  ingest.SourceList(*fsqQueries),
 	}
 	if needsSeeds(opts.Sources) {
 		seeds, err := readSeedURLs(*urlsFile)

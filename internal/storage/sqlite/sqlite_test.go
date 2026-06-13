@@ -326,7 +326,7 @@ func TestFacets(t *testing.T) {
 		}
 	}
 
-	cats, err := repo.CategoryFacets(ctx)
+	cats, err := repo.CategoryFacets(ctx, "")
 	if err != nil {
 		t.Fatalf("CategoryFacets: %v", err)
 	}
@@ -334,7 +334,7 @@ func TestFacets(t *testing.T) {
 		t.Errorf("categories = %+v", cats)
 	}
 
-	cities, err := repo.CityFacets(ctx)
+	cities, err := repo.CityFacets(ctx, "")
 	if err != nil {
 		t.Fatalf("CityFacets: %v", err)
 	}

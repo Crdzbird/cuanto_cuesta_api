@@ -43,6 +43,11 @@ var nameStopwords = map[string]bool{
 	"y": true, "de": true, "del": true, "la": true, "el": true, "los": true,
 	"las": true, "en": true, "tu": true, "by": true, "the": true, "and": true,
 	"valencia": true, "ruzafa": true, "russafa": true, "grooming": true,
+	// dry-cleaning & vets domain
+	"veterinario": true, "veterinaria": true, "veterinary": true, "vet": true,
+	"tintoreria": true, "lavanderia": true, "laundry": true,
+	"drycleaning": true, "dry": true, "cleaning": true, "mascotas": true,
+	"pet": true, "pets": true, "animal": true, "animales": true,
 }
 
 // Fold lowercases s and removes diacritics ("Salón YöY" → "salon yoy").

@@ -61,11 +61,19 @@
     #scrim { position:fixed; inset:0; background:rgba(0,0,0,.4); opacity:0; pointer-events:none;
       transition:opacity .25s; z-index:20; }
     #scrim.open { opacity:1; pointer-events:auto; }
+    .seg { display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+    .seg button { background:var(--panel2); color:var(--muted); border:0; border-radius:0;
+      padding:7px 12px; font-size:13px; cursor:pointer; }
+    .seg button.active { background:var(--accent); color:#fff; }
   </style>
 </head>
 <body>
   <header>
-    <h1>cuanto_cuesta · dashboard</h1>
+    <h1>cuanto_cuesta · <span id="vertName">services</span></h1>
+    <div class="seg" id="vertSeg">
+      <button type="button" data-v="services">Vets &amp; dry-cleaning</button>
+      <button type="button" data-v="grooming">Barbers &amp; hair</button>
+    </div>
     <div class="spacer"></div>
     <input type="search" id="search" placeholder="Search businesses…" autocomplete="off">
     <span class="updated" id="updated"></span>
@@ -88,18 +96,18 @@
     <section class="charts">
       <div class="card">
         <h2>Known vs Unknown</h2>
-        <p class="hint">Unknown = present only in Supabase/Google Maps</p>
+        <p class="hint">Unknown = only in external directories (Google Maps + Yelp), never scraped by us</p>
         <div class="chart-box"><canvas id="knownChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>By source</h2>
+        <p class="hint">where each business comes from (Google Maps = Supabase). Matched ones count under several.</p>
+        <div class="chart-box"><canvas id="sourceChart"></canvas></div>
       </div>
       <div class="card">
         <h2>Coverage</h2>
         <p class="hint">share of the catalog with each attribute</p>
         <div class="chart-box"><canvas id="attrChart"></canvas></div>
-      </div>
-      <div class="card">
-        <h2>By source</h2>
-        <p class="hint">a matched business counts under several</p>
-        <div class="chart-box"><canvas id="sourceChart"></canvas></div>
       </div>
       <div class="card">
         <h2>Rating distribution</h2>
@@ -131,6 +139,12 @@
     const charts = {};
     let autoTimer = null, countdown = 0;
     const H = { 'ngrok-skip-browser-warning': '1' };
+    const VLABEL = { services: 'Vets & dry-cleaning', grooming: 'Barbers & hair' };
+    let vertical = new URLSearchParams(location.search).get('vertical') === 'grooming' ? 'grooming' : 'services';
+
+    const SOURCE_NAMES = { supabase:'Google Maps', yelp:'Yelp', booksy:'Booksy',
+      treatwell:'Treatwell', web:'Web', crawl:'Web crawl' };
+    const sourceLabel = (s) => SOURCE_NAMES[s] || s;
 
     function palette(n) {
       const base = ['#5b8cff','#2dd4a7','#f6a609','#a78bfa','#38bdf8','#fb7185','#34d399','#fbbf24','#c084fc','#f472b6','#4ade80','#22d3ee'];
@@ -158,7 +172,7 @@
 
     async function load() {
       try {
-        const res = await fetch('/v1/stats', { headers:H });
+        const res = await fetch('/v1/stats?vertical='+vertical, { headers:H });
         if (!res.ok) throw new Error('HTTP '+res.status);
         render(await res.json());
         $('error').style.display='none';
@@ -201,10 +215,10 @@
           scales:{ x:{suggestedMax:100,ticks:{color:css('--muted'),callback:v=>v+'%'},grid:{color:css('--line')}},
                    y:{ticks:{color:css('--muted')},grid:{display:false}} } }) });
 
-      // By source bar
+      // By source bar (friendly names: supabase = Google Maps)
       const src = s.by_source||[];
       upsert('source','sourceChart',{ type:'bar',
-        data:{ labels:src.map(x=>x.source), datasets:[{ data:src.map(x=>x.count),
+        data:{ labels:src.map(x=>sourceLabel(x.source)), datasets:[{ data:src.map(x=>x.count),
           backgroundColor:palette(src.length), borderRadius:6 }] },
         options: baseOpts({ plugins:{legend:{display:false},
           tooltip:{callbacks:{label:c=>c.raw+' ('+src[c.dataIndex].percent+'%)'}}}, scales:axes() }) });
@@ -241,7 +255,7 @@
     async function drill(kind, value, label) {
       openDrawer(label+' · loading…');
       try {
-        const res = await fetch('/v1/businesses?'+kind+'='+encodeURIComponent(value)+'&limit=50', { headers:H });
+        const res = await fetch('/v1/businesses?vertical='+vertical+'&'+kind+'='+encodeURIComponent(value)+'&limit=50', { headers:H });
         const d = await res.json();
         renderList(label+' ('+d.total+')', d.items);
       } catch(e) { renderList('Error', []); }
@@ -250,7 +264,7 @@
       if (!q) { closeDrawer(); return; }
       openDrawer('Search “'+q+'” · loading…');
       try {
-        const res = await fetch('/v1/businesses?q='+encodeURIComponent(q)+'&limit=50', { headers:H });
+        const res = await fetch('/v1/businesses?vertical='+vertical+'&q='+encodeURIComponent(q)+'&limit=50', { headers:H });
         const d = await res.json();
         renderList('“'+q+'” ('+d.total+')', d.items);
       } catch(e) { renderList('Error', []); }
@@ -266,7 +280,7 @@
         return `<div class="biz"><div class="n">${esc(i.name)} ${badges}</div>
           <div class="m"><span>${esc(i.label||i.category||'')}</span>
           ${i.city?`<span>📍 ${esc(i.city)}</span>`:''}${rating?`<span>${rating}</span>`:''}
-          ${price?`<span>${price}</span>`:''}<span>${(i.sources||[]).join(', ')}</span></div></div>`;
+          ${price?`<span>${price}</span>`:''}<span>${(i.sources||[]).map(sourceLabel).join(', ')}</span></div></div>`;
       }).join('') || '<div class="biz">No results.</div>';
     }
     function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -290,6 +304,18 @@
     search.addEventListener('input', () => { clearTimeout(st); st = setTimeout(() => searchBiz(search.value.trim()), 300); });
     document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeDrawer(); });
 
+    // Vertical switch
+    function applyVertical() {
+      $('vertName').textContent = VLABEL[vertical];
+      document.querySelectorAll('#vertSeg button').forEach(b =>
+        b.classList.toggle('active', b.dataset.v === vertical));
+      const u = new URL(location); u.searchParams.set('vertical', vertical); history.replaceState({}, '', u);
+    }
+    document.querySelectorAll('#vertSeg button').forEach(b => b.addEventListener('click', () => {
+      if (vertical === b.dataset.v) return;
+      vertical = b.dataset.v; applyVertical(); load();
+    }));
+    applyVertical();
     load();
   </script>
 </body>

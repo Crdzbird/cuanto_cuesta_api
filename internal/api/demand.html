@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>cuanto_cuesta · Valencia grooming demand</title>
+  <title>cuanto_cuesta · Valencia dry-cleaning & vet demand</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <style>
     :root {
@@ -23,6 +23,9 @@
     .updated { color:var(--muted); font-size:13px; }
     a.nav { color:var(--muted); text-decoration:none; font-size:14px; }
     a.nav:hover { color:var(--text); }
+    .seg { display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+    .seg button { background:var(--panel2); color:var(--muted); border:0; padding:7px 12px; font-size:13px; cursor:pointer; }
+    .seg button.active { background:var(--accent); color:#fff; }
     button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:8px 14px;
       font-size:14px; font-weight:600; cursor:pointer; }
     button.ghost { background:var(--panel2); color:var(--text); border:1px solid var(--line); }
@@ -54,11 +57,15 @@
 </head>
 <body>
   <header>
-    <h1>Grooming demand · <span id="cityName">Valencia</span></h1>
-    <a class="nav" href="/dashboard">← catalog dashboard</a>
+    <h1><span id="vertTitle">Dry-cleaning &amp; vet</span> demand · <span id="cityName">Valencia</span></h1>
+    <div class="seg" id="vertSeg">
+      <button type="button" data-v="services">Vets &amp; dry-cleaning</button>
+      <button type="button" data-v="grooming">Barbers &amp; hair</button>
+    </div>
+    <a class="nav" href="/dashboard">← dashboard</a>
     <div class="spacer"></div>
     <span class="updated" id="updated"></span>
-    <button class="ghost" id="queryBtn" type="button">Price queries: off</button>
+    <button class="ghost" id="queryBtn" type="button">Search queries: off</button>
     <button class="ghost" id="autoBtn" type="button">Auto: off</button>
     <button id="refreshBtn" type="button">Refresh</button>
   </header>
@@ -72,7 +79,7 @@
     </div>
 
     <section class="kpis">
-      <div class="card kpi"><div class="label">Est. monthly searches <span class="tag model">model</span></div><div class="value" id="kpiSearches">–</div><div class="sub">barbershops + hair salons</div></div>
+      <div class="card kpi"><div class="label">Est. monthly searches <span class="tag model">model</span></div><div class="value" id="kpiSearches">–</div><div class="sub"></div></div>
       <div class="card kpi"><div class="label">Total reviews <span class="tag real">real</span></div><div class="value" id="kpiReviews">–</div><div class="sub">customer engagement</div></div>
       <div class="card kpi"><div class="label">Businesses <span class="tag real">real</span></div><div class="value" id="kpiBiz">–</div><div class="sub">supply in city</div></div>
       <div class="card kpi"><div class="label">Avg rating <span class="tag real">real</span></div><div class="value" id="kpiRating">–</div><div class="sub">across rated</div></div>
@@ -91,14 +98,25 @@
           </table>
         </div>
       </div>
+      <div class="card full" id="intentCard" style="display:none">
+        <h2>Service &amp; symptom searches <span class="tag model">model</span></h2>
+        <p class="hint" id="intentHint">vet-intent terms — “vacuna”, “medicina”, “inyección”, “perro enfermo”, “vaccine”, “dog is sick”, “vet near me”…</p>
+        <div style="display:grid; grid-template-columns:1.4fr 1fr; gap:18px; align-items:center">
+          <div class="chart-box"><canvas id="intentChart"></canvas></div>
+          <table>
+            <thead><tr><th>Term</th><th>Language</th><th class="num">Est. searches/mo</th></tr></thead>
+            <tbody id="intentBody"></tbody>
+          </table>
+        </div>
+      </div>
       <div class="card full">
         <h2>Seasonal search interest <span class="tag model">model</span></h2>
-        <p class="hint">estimated monthly searches across the year (modeled from engagement + grooming seasonality)</p>
+        <p class="hint">estimated monthly searches across the year (modeled from engagement + seasonality)</p>
         <div class="chart-box"><canvas id="trendChart"></canvas></div>
       </div>
       <div class="card">
         <h2>Interest split <span class="tag real">real</span></h2>
-        <p class="hint">reviews: barbershops vs hair salons</p>
+        <p class="hint">reviews by service type</p>
         <div class="chart-box short"><canvas id="splitChart"></canvas></div>
       </div>
       <div class="card">
@@ -123,6 +141,8 @@
     const charts = {};
     let autoTimer = null, countdown = 0, withQueries = false;
     const H = { 'ngrok-skip-browser-warning':'1' };
+    const VTITLE = { services: 'Dry-cleaning & vet', grooming: 'Barbers & hair' };
+    let vertical = new URLSearchParams(location.search).get('vertical') === 'grooming' ? 'grooming' : 'services';
     const fmt = (n) => n.toLocaleString();
 
     function baseOpts(extra={}) {
@@ -140,7 +160,7 @@
 
     async function load() {
       try {
-        const url = '/v1/demand?city=valencia&categories=barberia,peluqueria' + (withQueries ? '&query=true' : '');
+        const url = '/v1/demand?city=valencia&vertical=' + vertical + (withQueries ? '&query=true' : '');
         const res = await fetch(url, { headers:H });
         if (!res.ok) throw new Error('HTTP '+res.status);
         render(await res.json());
@@ -211,8 +231,24 @@
         $('queryBody').innerHTML = ph.map(p =>
           `<tr><td>${esc(p.phrase)}</td><td>${esc(p.language)}</td>
            <td class="num">${fmt(p.estimated_searches)}</td><td class="num">${p.percent}%</td></tr>`).join('');
+
+        // Service & symptom (vet-intent) terms
+        const it = d.queries.intent_terms || [];
+        $('intentCard').style.display = '';
+        $('intentHint').textContent = 'service/symptom searches ≈ ' + fmt(d.queries.total_service_intent_searches)
+          + '/mo · vet-intent terms (illustrative)';
+        upsert('intent','intentChart',{ type:'bar',
+          data:{ labels:it.map(t=>t.term), datasets:[{ data:it.map(t=>t.estimated_searches),
+            backgroundColor:'#38bdf8', borderRadius:6 }] },
+          options: baseOpts({ indexAxis:'y', plugins:{legend:{display:false},
+            tooltip:{callbacks:{label:c=>fmt(c.raw)+'/mo'}}},
+            scales:{ x:{ticks:{color:css('--muted')},grid:{color:css('--line')},beginAtZero:true},
+                     y:{ticks:{color:css('--muted')},grid:{display:false}} } }) });
+        $('intentBody').innerHTML = it.map(t =>
+          `<tr><td>${esc(t.term)}</td><td>${esc(t.language)}</td><td class="num">${fmt(t.estimated_searches)}</td></tr>`).join('');
       } else {
         card.style.display = 'none';
+        $('intentCard').style.display = 'none';
       }
     }
     function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -220,9 +256,19 @@
     $('refreshBtn').addEventListener('click', load);
     $('queryBtn').addEventListener('click', (e) => {
       withQueries = !withQueries;
-      e.target.textContent = 'Price queries: ' + (withQueries ? 'on' : 'off');
+      e.target.textContent = 'Search queries: ' + (withQueries ? 'on' : 'off');
       load();
     });
+    function applyVertical() {
+      $('vertTitle').textContent = VTITLE[vertical];
+      document.querySelectorAll('#vertSeg button').forEach(b => b.classList.toggle('active', b.dataset.v === vertical));
+      const u = new URL(location); u.searchParams.set('vertical', vertical); history.replaceState({}, '', u);
+    }
+    document.querySelectorAll('#vertSeg button').forEach(b => b.addEventListener('click', () => {
+      if (vertical === b.dataset.v) return;
+      vertical = b.dataset.v; applyVertical(); load();
+    }));
+    applyVertical();
     $('autoBtn').addEventListener('click', (e) => {
       if (autoTimer) { clearInterval(autoTimer); autoTimer=null; e.target.textContent='Auto: off'; }
       else { countdown=15; autoTimer=setInterval(()=>{ countdown--; if(countdown<=0){load();countdown=15;}

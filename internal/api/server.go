@@ -35,6 +35,13 @@ func NewServer(addr string, repo domain.BusinessRepository, logger *slog.Logger,
 	mux.HandleFunc("GET /v1/cities", h.listCities)
 	mux.HandleFunc("GET /v1/stats", h.stats)
 	mux.HandleFunc("GET /v1/demand", h.demand)
+
+	// Grooming vertical (barbers, hair salons) — the same handlers, scoped by
+	// path. The /v1 endpoints above default to the services vertical.
+	mux.HandleFunc("GET /v1/grooming/businesses", h.listBusinesses)
+	mux.HandleFunc("GET /v1/grooming/businesses/{id}", h.getBusiness)
+	mux.HandleFunc("GET /v1/grooming/stats", h.stats)
+	mux.HandleFunc("GET /v1/grooming/demand", h.demand)
 	mux.HandleFunc("POST /v1/admin/scrape", h.startScrape)
 	mux.HandleFunc("GET /v1/admin/scrape", h.scrapeStatus)
 	mux.HandleFunc("GET /openapi.yaml", h.openapiYAML)

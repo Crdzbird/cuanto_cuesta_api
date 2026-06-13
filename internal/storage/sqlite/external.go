@@ -68,15 +68,20 @@ func (r *Repo) SyncExternal(ctx context.Context, e *domain.External) (int64, err
 // services carry the numeric price estimates so the catalog price band works.
 func externalToListing(e *domain.External) *domain.Listing {
 	l := &domain.Listing{
-		Source:     e.Source,
-		Name:       e.Name,
-		Category:   e.Category,
-		SchemaType: "LocalBusiness",
-		Address:    domain.Address{Street: e.Address, Country: "es"},
-		Latitude:   e.Latitude,
-		Longitude:  e.Longitude,
-		URL:        "", // external dataset has no canonical page
-		ScrapedAt:  time.Now().UTC(),
+		Source:        e.Source,
+		Name:          e.Name,
+		Category:      e.Category,
+		SchemaType:    "LocalBusiness",
+		Address:       domain.Address{Street: e.Address, Country: "es"},
+		Latitude:      e.Latitude,
+		Longitude:     e.Longitude,
+		PriceFrom:     e.PriceFrom, // band from the external price level
+		PriceTo:       e.PriceTo,
+		PriceCurrency: e.Currency,
+		ImageURL:      e.ImageURL,
+		Images:        e.Images,
+		URL:           "", // external dataset has no canonical page
+		ScrapedAt:     time.Now().UTC(),
 	}
 	l.SourceID = e.PlaceID
 	if l.SourceID == "" {

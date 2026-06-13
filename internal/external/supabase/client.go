@@ -95,12 +95,16 @@ type estimateRow struct {
 // googleCategoryToSlug aligns Google/Supabase category names with our slugs so
 // externals share the catalog's category filter and labels.
 var googleCategoryToSlug = map[string]string{
-	"barber":       "barberia",
-	"hair_salon":   "peluqueria",
-	"hairdresser":  "peluqueria",
-	"nail_salon":   "salon-de-unas",
-	"spa":          "spa",
-	"beauty_salon": "peluqueria",
+	"barber":          "barberia",
+	"hair_salon":      "peluqueria",
+	"hairdresser":     "peluqueria",
+	"nail_salon":      "salon-de-unas",
+	"spa":             "spa",
+	"beauty_salon":    "peluqueria",
+	"veterinary_care": "veterinario",
+	"vet":             "veterinario",
+	"dry_cleaner":     "tintoreria",
+	"laundry":         "lavanderia",
 }
 
 // FetchExternals returns every external business with its price estimates

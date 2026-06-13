@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS businesses (
 	reviews       TEXT NOT NULL DEFAULT '[]',
 	sponsored     INTEGER NOT NULL DEFAULT 0,
 	verified      INTEGER NOT NULL DEFAULT 0,
+	vertical      TEXT NOT NULL DEFAULT '',
 	sources       TEXT NOT NULL DEFAULT '[]',
 	last_verified TEXT NOT NULL
 );
@@ -78,6 +79,9 @@ CREATE TABLE IF NOT EXISTS listings (
 	lat           REAL,
 	lng           REAL,
 	price_range   TEXT NOT NULL DEFAULT '',
+	price_from    REAL,
+	price_to      REAL,
+	price_currency TEXT NOT NULL DEFAULT '',
 	rating        REAL,
 	review_count  INTEGER,
 	phone         TEXT NOT NULL DEFAULT '',
@@ -165,6 +169,23 @@ func Open(ctx context.Context, path string) (*Repo, error) {
 			!strings.Contains(err.Error(), "duplicate column") {
 			_ = db.Close()
 			return nil, fmt.Errorf("migrate %s column: %w", col, err)
+		}
+	}
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE businesses ADD COLUMN vertical TEXT NOT NULL DEFAULT ''`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		_ = db.Close()
+		return nil, fmt.Errorf("migrate vertical column: %w", err)
+	}
+	for _, alter := range []string{
+		`ALTER TABLE listings ADD COLUMN price_from REAL`,
+		`ALTER TABLE listings ADD COLUMN price_to REAL`,
+		`ALTER TABLE listings ADD COLUMN price_currency TEXT NOT NULL DEFAULT ''`,
+	} {
+		if _, err := db.ExecContext(ctx, alter); err != nil &&
+			!strings.Contains(err.Error(), "duplicate column") {
+			_ = db.Close()
+			return nil, fmt.Errorf("migrate listing price columns: %w", err)
 		}
 	}
 	return &Repo{db: db}, nil
@@ -279,19 +300,28 @@ func insertListing(ctx context.Context, tx *sql.Tx, businessID int64, l *domain.
 	if l.Latitude != nil && l.Longitude != nil {
 		lat, lng = *l.Latitude, *l.Longitude
 	}
+	var pFrom, pTo any
+	if l.PriceFrom != nil {
+		pFrom = *l.PriceFrom
+	}
+	if l.PriceTo != nil {
+		pTo = *l.PriceTo
+	}
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO listings (source, source_id, business_id, url, name, category,
 			schema_type, description, city, street, locality, postal_code, country,
-			lat, lng, price_range, rating, review_count, phone, email, payment,
+			lat, lng, price_range, price_from, price_to, price_currency,
+			rating, review_count, phone, email, payment,
 			image_url, logo_url, images, social_links, opening_hours, services,
 			reviews, scraped_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(source, source_id) DO UPDATE SET
 			business_id=excluded.business_id, url=excluded.url, name=excluded.name,
 			category=excluded.category, schema_type=excluded.schema_type,
 			description=excluded.description, city=excluded.city, street=excluded.street,
 			locality=excluded.locality, postal_code=excluded.postal_code, country=excluded.country,
 			lat=excluded.lat, lng=excluded.lng, price_range=excluded.price_range,
+			price_from=excluded.price_from, price_to=excluded.price_to, price_currency=excluded.price_currency,
 			rating=excluded.rating, review_count=excluded.review_count,
 			phone=excluded.phone, email=excluded.email, payment=excluded.payment,
 			image_url=excluded.image_url, logo_url=excluded.logo_url, images=excluded.images,
@@ -300,6 +330,7 @@ func insertListing(ctx context.Context, tx *sql.Tx, businessID int64, l *domain.
 		l.Source, l.SourceID, businessID, l.URL, l.Name, l.Category,
 		l.SchemaType, l.Description, l.City, l.Address.Street, l.Address.Locality,
 		l.Address.PostalCode, l.Address.Country, lat, lng, l.PriceRange,
+		pFrom, pTo, l.PriceCurrency,
 		rating, reviewCount, l.Phone, l.Email, l.Payment, l.ImageURL, l.LogoURL,
 		j.images, j.social, j.hours, j.services, j.reviews,
 		l.ScrapedAt.UTC().Format(time.RFC3339))
@@ -374,7 +405,7 @@ func recomputeCanonical(ctx context.Context, tx *sql.Tx, businessID int64) error
 			price_range=?, price_from=?, price_to=?, price_currency=?,
 			rating=?, review_count=?, phone=?, email=?, payment=?,
 			image_url=?, logo_url=?, images=?, social_links=?, opening_hours=?,
-			reviews=?, sponsored=?, verified=?, sources=?, last_verified=?
+			reviews=?, sponsored=?, verified=?, vertical=?, sources=?, last_verified=?
 		WHERE id=?`,
 		b.Name, b.Category, b.SchemaType, b.Description, b.City,
 		b.Address.Street, b.Address.Locality, b.Address.PostalCode, b.Address.Country,
@@ -382,7 +413,7 @@ func recomputeCanonical(ctx context.Context, tx *sql.Tx, businessID int64) error
 		rating, reviewCount, b.Phone, b.Email, b.Payment,
 		b.ImageURL, b.LogoURL, string(imagesJSON), string(socialJSON), string(hoursJSON),
 		string(reviewsJSON), boolToInt(demoSponsored(businessID)),
-		boolToInt(demoVerified(businessID)), string(sourcesJSON),
+		boolToInt(demoVerified(businessID)), domain.VerticalOf(b.Category), string(sourcesJSON),
 		b.LastVerified.UTC().Format(time.RFC3339), businessID)
 	if err != nil {
 		return fmt.Errorf("update business %d: %w", businessID, err)
@@ -484,6 +515,10 @@ func (r *Repo) List(ctx context.Context, f domain.ListFilter) ([]domain.Business
 
 	var where []string
 	var args []any
+	if f.Vertical != "" {
+		where = append(where, "vertical = ?")
+		args = append(args, f.Vertical)
+	}
 	if f.Category != "" {
 		where = append(where, "category = ?")
 		args = append(args, f.Category)
@@ -644,26 +679,46 @@ func (r *Repo) renormalizeOne(ctx context.Context, id int64) error {
 }
 
 // CategoryFacets implements domain.BusinessRepository.
-func (r *Repo) CategoryFacets(ctx context.Context) ([]domain.Facet, error) {
-	return r.facets(ctx, "category")
+func (r *Repo) CategoryFacets(ctx context.Context, vertical string) ([]domain.Facet, error) {
+	return r.facets(ctx, "category", vertical)
 }
 
 // CityFacets implements domain.BusinessRepository.
-func (r *Repo) CityFacets(ctx context.Context) ([]domain.Facet, error) {
-	return r.facets(ctx, "city")
+func (r *Repo) CityFacets(ctx context.Context, vertical string) ([]domain.Facet, error) {
+	return r.facets(ctx, "city", vertical)
+}
+
+// verticalCond builds a " WHERE vertical = ?" clause (and args) for an
+// optional vertical; empty vertical yields no condition.
+func verticalCond(vertical string) (string, []any) {
+	if vertical == "" {
+		return "", nil
+	}
+	return " WHERE vertical = ?", []any{vertical}
+}
+
+// whereForVertical is verticalCond with a column prefix (for joins).
+func whereForVertical(vertical, prefix string) string {
+	if vertical == "" {
+		return ""
+	}
+	return " WHERE " + prefix + "vertical = ?"
 }
 
 // Stats implements domain.BusinessRepository. It computes most aggregates in
 // a single pass over the businesses table, plus one scalar for externals.
-func (r *Repo) Stats(ctx context.Context) (domain.Stats, error) {
+// vertical "" spans the whole catalog.
+func (r *Repo) Stats(ctx context.Context, vertical string) (domain.Stats, error) {
 	var s domain.Stats
+	cond, args := verticalCond(vertical)
 	if err := r.db.QueryRowContext(ctx,
-		`SELECT COUNT(DISTINCT business_id) FROM externals`).Scan(&s.WithExternals); err != nil {
+		`SELECT COUNT(DISTINCT e.business_id) FROM externals e JOIN businesses b ON b.id=e.business_id`+
+			whereForVertical(vertical, "b."), args...).Scan(&s.WithExternals); err != nil {
 		return domain.Stats{}, fmt.Errorf("stats externals: %w", err)
 	}
 
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT sources, rating, lat, lng, price_from, price_to, sponsored, verified FROM businesses`)
+		`SELECT sources, rating, lat, lng, price_from, price_to, sponsored, verified FROM businesses`+cond, args...)
 	if err != nil {
 		return domain.Stats{}, fmt.Errorf("stats scan: %w", err)
 	}
@@ -687,7 +742,7 @@ func (r *Repo) Stats(ctx context.Context) (domain.Stats, error) {
 		for _, src := range srcs {
 			srcTally[src]++
 		}
-		if len(srcs) == 1 && srcs[0] == "supabase" {
+		if domain.OnlyExternalSources(srcs) {
 			s.Unknown++
 		}
 		if sponsored.Int64 != 0 {
@@ -744,10 +799,16 @@ func (r *Repo) Stats(ctx context.Context) (domain.Stats, error) {
 
 // facets aggregates one column of the canonical businesses table. The column
 // name is compile-time constant at both call sites, never user input.
-func (r *Repo) facets(ctx context.Context, column string) ([]domain.Facet, error) {
+func (r *Repo) facets(ctx context.Context, column, vertical string) ([]domain.Facet, error) {
+	where := column + " != ''"
+	var args []any
+	if vertical != "" {
+		where += " AND vertical = ?"
+		args = append(args, vertical)
+	}
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT `+column+`, COUNT(*) AS n FROM businesses
-		 WHERE `+column+` != '' GROUP BY `+column+` ORDER BY n DESC, `+column)
+		 WHERE `+where+` GROUP BY `+column+` ORDER BY n DESC, `+column, args...)
 	if err != nil {
 		return nil, fmt.Errorf("facets %s: %w", column, err)
 	}

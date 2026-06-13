@@ -74,6 +74,16 @@ func MergeListings(listings []Listing) Business {
 	b.Rating = aggregateRating(ls)
 	b.Reviews = collectReviews(ls)
 	b.PriceFrom, b.PriceTo, b.PriceCurrency = priceSummary(b.Services)
+	// Fallback: sources without itemized services may carry a price band
+	// directly (e.g. a Yelp price level). Use the freshest such listing.
+	if b.PriceFrom == nil {
+		for _, l := range ls { // ls is sorted newest-first
+			if l.PriceFrom != nil && l.PriceTo != nil {
+				b.PriceFrom, b.PriceTo, b.PriceCurrency = l.PriceFrom, l.PriceTo, l.PriceCurrency
+				break
+			}
+		}
+	}
 	// Sources without a published price range (Treatwell) get one derived
 	// from the service menu, in the same shape Booksy publishes natively.
 	if b.PriceRange == "" && b.PriceFrom != nil {

@@ -19,6 +19,7 @@ const selectBusinessCols = `SELECT id, name, category, schema_type, description,
 
 const listingCols = `source, source_id, url, name, category, schema_type, description,
 	city, street, locality, postal_code, country, lat, lng, price_range,
+	price_from, price_to, price_currency,
 	rating, review_count, phone, email, payment, image_url, logo_url, images,
 	social_links, opening_hours, services, reviews, scraped_at`
 
@@ -64,9 +65,9 @@ func scanBusiness(row rowScanner) (*domain.Business, error) {
 	if t, err := time.Parse(time.RFC3339, lastVerified); err == nil {
 		b.LastVerified = t
 	}
-	// "Unknown": we only know this business from an external dataset
-	// (Supabase/Google Maps) — we never scraped it ourselves.
-	b.Unknown = len(b.Sources) == 1 && b.Sources[0] == "supabase"
+	// "Unknown": we only know this business from external datasets
+	// (Supabase/Yelp) — we never scraped it ourselves.
+	b.Unknown = domain.OnlyExternalSources(b.Sources)
 	return &b, nil
 }
 
@@ -91,13 +92,13 @@ func scanListings(rows *sql.Rows) ([]domain.Listing, error) {
 	var out []domain.Listing
 	for rows.Next() {
 		var l domain.Listing
-		var lat, lng, rating sql.NullFloat64
+		var lat, lng, rating, pFrom, pTo sql.NullFloat64
 		var reviewCount sql.NullInt64
 		var imagesJSON, socialJSON, hoursJSON, servicesJSON, reviewsJSON, scrapedAt string
 		err := rows.Scan(&l.Source, &l.SourceID, &l.URL, &l.Name, &l.Category,
 			&l.SchemaType, &l.Description, &l.City,
 			&l.Address.Street, &l.Address.Locality, &l.Address.PostalCode, &l.Address.Country,
-			&lat, &lng, &l.PriceRange, &rating, &reviewCount,
+			&lat, &lng, &l.PriceRange, &pFrom, &pTo, &l.PriceCurrency, &rating, &reviewCount,
 			&l.Phone, &l.Email, &l.Payment, &l.ImageURL, &l.LogoURL, &imagesJSON,
 			&socialJSON, &hoursJSON, &servicesJSON, &reviewsJSON, &scrapedAt)
 		if err != nil {
@@ -105,6 +106,12 @@ func scanListings(rows *sql.Rows) ([]domain.Listing, error) {
 		}
 		if lat.Valid && lng.Valid {
 			l.Latitude, l.Longitude = &lat.Float64, &lng.Float64
+		}
+		if pFrom.Valid {
+			l.PriceFrom = &pFrom.Float64
+		}
+		if pTo.Valid {
+			l.PriceTo = &pTo.Float64
 		}
 		if rating.Valid {
 			l.Rating = &domain.Rating{Value: rating.Float64, ReviewCount: int(reviewCount.Int64)}

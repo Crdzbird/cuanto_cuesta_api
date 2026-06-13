@@ -13,8 +13,11 @@ func TestPriceLevelRange(t *testing.T) {
 		{"$$", 10, 99, true},
 		{"$$$", 100, 999, true},
 		{"$$$$", 1000, 9999, true},
+		{"€", 0, 9, true},     // Yelp ES localizes the symbol
+		{"€€", 10, 99, true},
+		{"€€€", 100, 999, true},
 		{"", 0, 0, false},
-		{"free", 0, 0, false},
+		{"free", 0, 0, false}, // non-symbol string rejected
 	}
 	for _, tt := range tests {
 		from, to, ok := PriceLevelRange(tt.level)

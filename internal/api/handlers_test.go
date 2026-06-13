@@ -45,11 +45,11 @@ func (f *fakeRepo) ListStaleListings(context.Context, string, time.Time, int) ([
 	return nil, nil
 }
 
-func (f *fakeRepo) CategoryFacets(context.Context) ([]domain.Facet, error) {
+func (f *fakeRepo) CategoryFacets(context.Context, string) ([]domain.Facet, error) {
 	return []domain.Facet{{Value: "barberia", Count: 2}, {Value: "salon-de-unas", Count: 1}}, nil
 }
 
-func (f *fakeRepo) CityFacets(context.Context) ([]domain.Facet, error) {
+func (f *fakeRepo) CityFacets(context.Context, string) ([]domain.Facet, error) {
 	return []domain.Facet{{Value: "madrid", Count: 3}}, nil
 }
 
@@ -64,7 +64,7 @@ func (f *fakeRepo) DemandStats(context.Context, string, []string) (domain.Demand
 	}, nil
 }
 
-func (f *fakeRepo) Stats(context.Context) (domain.Stats, error) {
+func (f *fakeRepo) Stats(context.Context, string) (domain.Stats, error) {
 	return domain.Stats{
 		Total: 160, Unknown: 23, WithExternals: 18, Sponsored: 48, Verified: 96,
 		BySource: []domain.Facet{{Value: "booksy", Count: 90}, {Value: "supabase", Count: 25}},

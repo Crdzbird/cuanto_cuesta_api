@@ -241,6 +241,11 @@ var categoryLabels = map[string]string{
 	"servicios-profesionales": "Servicios profesionales",
 	"servicios-para-mascotas": "Mascotas",
 	"otro":                    "Otro",
+	// dry-cleaning & vets
+	"tintoreria":  "Tintorería",
+	"lavanderia":  "Lavandería",
+	"veterinario": "Veterinario",
+	"veterinaria": "Veterinario",
 }
 
 // schemaTypeLabels is the fallback when a listing has no category slug
@@ -251,6 +256,8 @@ var schemaTypeLabels = map[string]string{
 	"BeautySalon":             "Salón de belleza",
 	"DaySpa":                  "Spa",
 	"HealthAndBeautyBusiness": "Salud y belleza",
+	"VeterinaryCare":          "Veterinario",
+	"DryCleaningOrLaundry":    "Tintorería",
 }
 
 // categoryLabel returns a clean service label for a business, preferring the
@@ -363,6 +370,23 @@ type handlers struct {
 	jobs        *jobManager // nil when scrape endpoints are disabled
 }
 
+// requestVertical resolves the vertical from the path (/v1/grooming/* →
+// grooming) or the ?vertical query, defaulting to services (the catalog the
+// main endpoints have served since the pivot). "all" disables the filter.
+func requestVertical(r *http.Request) string {
+	if strings.Contains(r.URL.Path, "/grooming/") {
+		return domain.VerticalGrooming
+	}
+	switch v := r.URL.Query().Get("vertical"); v {
+	case domain.VerticalGrooming, domain.VerticalServices:
+		return v
+	case "all":
+		return ""
+	default:
+		return domain.VerticalServices
+	}
+}
+
 // GET /v1/businesses
 func (h *handlers) listBusinesses(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -370,6 +394,7 @@ func (h *handlers) listBusinesses(w http.ResponseWriter, r *http.Request) {
 		Category: q.Get("category"),
 		City:     q.Get("city"),
 		Query:    q.Get("q"),
+		Vertical: requestVertical(r),
 	}
 	var err error
 	if f.MinRating, err = parseFloatParam(q.Get("min_rating"), 0); err != nil {
@@ -542,8 +567,8 @@ func (h *handlers) listCities(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handlers) writeFacets(w http.ResponseWriter, r *http.Request, name string,
-	load func(context.Context) ([]domain.Facet, error)) {
-	facets, err := load(r.Context())
+	load func(context.Context, string) ([]domain.Facet, error)) {
+	facets, err := load(r.Context(), requestVertical(r))
 	if err != nil {
 		h.logger.Error("list "+name, "err", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
@@ -572,19 +597,20 @@ func pct(n, total int) float64 {
 // GET /v1/stats
 func (h *handlers) stats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	s, err := h.repo.Stats(ctx)
+	vert := requestVertical(r)
+	s, err := h.repo.Stats(ctx, vert)
 	if err != nil {
 		h.logger.Error("stats", "err", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	cats, err := h.repo.CategoryFacets(ctx)
+	cats, err := h.repo.CategoryFacets(ctx, vert)
 	if err != nil {
 		h.logger.Error("stats categories", "err", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	cities, err := h.repo.CityFacets(ctx)
+	cities, err := h.repo.CityFacets(ctx, vert)
 	if err != nil {
 		h.logger.Error("stats cities", "err", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
@@ -645,8 +671,8 @@ func (h *handlers) stats(w http.ResponseWriter, r *http.Request) {
 // heuristic, NOT measured search volume — the page labels it as modeled.
 const searchesPerReview = 6.0
 
-// monthlySeasonality is a 12-month interest curve (Jan..Dec) for grooming
-// demand: dips in deep winter, climbs toward summer, spikes in December.
+// monthlySeasonality is an illustrative 12-month interest curve (Jan..Dec):
+// a mild dip in deep winter, a climb toward summer, a December uptick.
 // Normalized to average 1.0 so it reshapes a total without changing it.
 var monthlySeasonality = [12]float64{0.85, 0.88, 0.97, 1.02, 1.10, 1.18, 1.12, 0.90, 1.05, 1.04, 1.00, 1.29}
 
@@ -668,13 +694,64 @@ var priceQueries = []struct {
 	{"Скільки це коштує?", "uk", "Ukrainian", 0.08},
 }
 
+// serviceIntentShare is the modeled fraction of searches that express a
+// service/symptom intent (vaccine, sick pet, …) rather than a price question.
+const serviceIntentShare = 0.30
+
+type intentTerm struct {
+	Term, Lang, Language string
+	Weight               float64
+}
+
+// vetIntentTerms are service/symptom search terms for the services vertical.
+var vetIntentTerms = []intentTerm{
+	{"vacuna", "es", "Spanish", 0.18},
+	{"vacuna perro", "es", "Spanish", 0.14},
+	{"veterinario", "es", "Spanish", 0.14},
+	{"medicina", "es", "Spanish", 0.11},
+	{"perro enfermo", "es", "Spanish", 0.11},
+	{"inyección", "es", "Spanish", 0.08},
+	{"vaccine", "en", "English", 0.07},
+	{"dog is sick", "en", "English", 0.06},
+	{"vet near me", "en", "English", 0.06},
+	{"urgencias veterinario", "es", "Spanish", 0.05},
+}
+
+// groomingIntentTerms are service search terms for the grooming vertical.
+var groomingIntentTerms = []intentTerm{
+	{"corte de pelo", "es", "Spanish", 0.20},
+	{"barbería cerca", "es", "Spanish", 0.15},
+	{"corte de barba", "es", "Spanish", 0.13},
+	{"mechas", "es", "Spanish", 0.11},
+	{"tinte de pelo", "es", "Spanish", 0.10},
+	{"peluquería", "es", "Spanish", 0.10},
+	{"haircut near me", "en", "English", 0.08},
+	{"fade", "en", "English", 0.07},
+	{"corte mujer", "es", "Spanish", 0.06},
+}
+
+func intentTermsFor(vertical string) []intentTerm {
+	if vertical == domain.VerticalGrooming {
+		return groomingIntentTerms
+	}
+	return vetIntentTerms
+}
+
+// demandCategories returns the default category set for a vertical.
+func demandCategories(vertical string) []string {
+	if vertical == domain.VerticalGrooming {
+		return []string{"barberia", "peluqueria", "salon-de-unas"}
+	}
+	return []string{"tintoreria", "lavanderia", "veterinario", "veterinaria"}
+}
+
 // GET /v1/demand?city=valencia&categories=barberia,peluqueria
 func (h *handlers) demand(w http.ResponseWriter, r *http.Request) {
 	city := r.URL.Query().Get("city")
 	if city == "" {
 		city = "valencia"
 	}
-	categories := []string{"barberia", "peluqueria"}
+	categories := demandCategories(requestVertical(r))
 	if c := r.URL.Query().Get("categories"); c != "" {
 		categories = strings.Split(c, ",")
 	}
@@ -748,11 +825,26 @@ func (h *handlers) demand(w http.ResponseWriter, r *http.Request) {
 				"percent":            math.Round(pq.Weight * 1000) / 10,
 			})
 		}
+		totalSI := int(math.Round(float64(estMonthly) * serviceIntentShare))
+		vertTerms := intentTermsFor(requestVertical(r))
+		terms := make([]map[string]any, 0, len(vertTerms))
+		for _, it := range vertTerms {
+			terms = append(terms, map[string]any{
+				"term":               it.Term,
+				"lang":               it.Lang,
+				"language":           it.Language,
+				"estimated_searches": int(math.Round(float64(totalSI) * it.Weight)),
+				"percent":            math.Round(it.Weight * 1000) / 10,
+			})
+		}
 		resp["queries"] = map[string]any{
-			"price_intent_share":          priceIntentShare,
-			"total_price_intent_searches": totalPI,
-			"model":                       fmt.Sprintf("~%.0f%% of searches are price questions (illustrative)", priceIntentShare*100),
-			"phrases":                     phrases,
+			"price_intent_share":            priceIntentShare,
+			"total_price_intent_searches":   totalPI,
+			"model":                         fmt.Sprintf("~%.0f%% price questions, ~%.0f%% service/symptom terms (illustrative)", priceIntentShare*100, serviceIntentShare*100),
+			"phrases":                       phrases,
+			"service_intent_share":          serviceIntentShare,
+			"total_service_intent_searches": totalSI,
+			"intent_terms":                  terms,
 		}
 	}
 

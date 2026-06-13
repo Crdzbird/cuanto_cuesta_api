@@ -17,7 +17,9 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/crdzbird/cuanto_cuesta/internal/domain"
+	"github.com/crdzbird/cuanto_cuesta/internal/external/foursquare"
 	"github.com/crdzbird/cuanto_cuesta/internal/external/supabase"
+	"github.com/crdzbird/cuanto_cuesta/internal/external/yelp"
 	"github.com/crdzbird/cuanto_cuesta/internal/scraper"
 	"github.com/crdzbird/cuanto_cuesta/internal/scraper/booksy"
 	"github.com/crdzbird/cuanto_cuesta/internal/scraper/crawl"
@@ -46,6 +48,17 @@ type Options struct {
 	// Supabase (external "googlemaps" dataset) — used by the "supabase" source.
 	SupabaseURL string
 	SupabaseKey string
+
+	// Yelp Fusion — used by the "yelp" source.
+	YelpKey          string
+	YelpLocation     string   // e.g. "Valencia, Spain"
+	YelpCategories   []string // Fusion category aliases; default vets + dry-cleaning
+	YelpDetailPhotos bool     // fetch up to 3 photos per business from the detail endpoint
+
+	// Foursquare Places — used by the "foursquare" source.
+	FoursquareKey      string
+	FoursquareLocation string
+	FoursquareQueries  []string
 }
 
 func (o Options) withDefaults() Options {
@@ -78,7 +91,7 @@ type Result struct {
 }
 
 // validSources guards against typos before any network work begins.
-var validSources = map[string]bool{"booksy": true, "treatwell": true, "web": true, "crawl": true, "supabase": true}
+var validSources = map[string]bool{"booksy": true, "treatwell": true, "web": true, "crawl": true, "supabase": true, "yelp": true, "foursquare": true}
 
 // Run executes one ingest according to opts, writing to repo. It is safe to
 // cancel via ctx. Returns aggregated counts.
@@ -111,6 +124,18 @@ func Run(ctx context.Context, repo domain.BusinessRepository, opts Options, logg
 				return res, fmt.Errorf("supabase: %w", err)
 			}
 			res.record("supabase", sr)
+		case "yelp":
+			sr, err := runYelp(ctx, repo, opts, logger)
+			if err != nil {
+				return res, fmt.Errorf("yelp: %w", err)
+			}
+			res.record("yelp", sr)
+		case "foursquare":
+			sr, err := runFoursquare(ctx, repo, opts, logger)
+			if err != nil {
+				return res, fmt.Errorf("foursquare: %w", err)
+			}
+			res.record("foursquare", sr)
 		default:
 			var src scraper.Source
 			switch name {
@@ -273,6 +298,67 @@ func runSupabase(ctx context.Context, repo domain.BusinessRepository, opts Optio
 		}
 		sr.Saved++
 		logger.Info("synced external", "source", "supabase", "business_id", businessID, "name", externals[i].Name)
+	}
+	return sr, nil
+}
+
+// runYelp pulls businesses from the Yelp Fusion API and syncs each as an
+// external record (entity-resolved into the catalog, with detail attached).
+func runYelp(ctx context.Context, repo domain.BusinessRepository, opts Options, logger *slog.Logger) (SourceResult, error) {
+	if opts.YelpKey == "" {
+		return SourceResult{}, errors.New("source 'yelp' requires YelpKey")
+	}
+	client := yelp.New(opts.YelpKey, opts.YelpLocation)
+	externals, err := client.FetchExternals(ctx, opts.YelpCategories, opts.Limit, opts.YelpDetailPhotos)
+	if err != nil {
+		return SourceResult{}, err
+	}
+	logger.Info("fetched yelp businesses", "source", "yelp", "count", len(externals))
+
+	var sr SourceResult
+	for i := range externals {
+		if err := ctx.Err(); err != nil {
+			return sr, err
+		}
+		businessID, err := repo.SyncExternal(ctx, &externals[i])
+		if err != nil {
+			sr.Failed++
+			logger.Warn("sync yelp business failed", "name", externals[i].Name, "err", err)
+			continue
+		}
+		sr.Saved++
+		logger.Info("synced yelp business", "source", "yelp", "business_id", businessID, "name", externals[i].Name)
+	}
+	return sr, nil
+}
+
+// runFoursquare pulls businesses from the Foursquare Places API and syncs
+// each as an external record (entity-resolved into the catalog with photos,
+// ratings and price tiers attached).
+func runFoursquare(ctx context.Context, repo domain.BusinessRepository, opts Options, logger *slog.Logger) (SourceResult, error) {
+	if opts.FoursquareKey == "" {
+		return SourceResult{}, errors.New("source 'foursquare' requires FoursquareKey")
+	}
+	client := foursquare.New(opts.FoursquareKey, opts.FoursquareLocation)
+	externals, err := client.FetchExternals(ctx, opts.FoursquareQueries, opts.Limit)
+	if err != nil {
+		return SourceResult{}, err
+	}
+	logger.Info("fetched foursquare businesses", "source", "foursquare", "count", len(externals))
+
+	var sr SourceResult
+	for i := range externals {
+		if err := ctx.Err(); err != nil {
+			return sr, err
+		}
+		businessID, err := repo.SyncExternal(ctx, &externals[i])
+		if err != nil {
+			sr.Failed++
+			logger.Warn("sync foursquare business failed", "name", externals[i].Name, "err", err)
+			continue
+		}
+		sr.Saved++
+		logger.Info("synced foursquare business", "source", "foursquare", "business_id", businessID, "name", externals[i].Name)
 	}
 	return sr, nil
 }
