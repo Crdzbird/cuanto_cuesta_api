@@ -1,0 +1,15 @@
+# Cloud Build upload filter. Unlike .gitignore, this DOES include
+# cuanto_cuesta.db so it can be baked into the image as seed data.
+.git/
+.gitignore
+
+# transient SQLite sidecar files (never the main .db)
+*.db-shm
+*.db-wal
+
+# saved live HTML fixtures (gitignored, large, test-only)
+internal/scraper/booksy/testdata/*_live.html
+internal/scraper/treatwell/testdata/*_live.html
+
+# local tooling
+*.md

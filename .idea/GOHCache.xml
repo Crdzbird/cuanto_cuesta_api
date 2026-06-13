@@ -1,0 +1,647 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="GoORMHelperCache">
+    <option name="schemaMapping">
+      <map>
+        <entry key="Address">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/domain/business.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="Business">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/domain/business.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="Facet">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/domain/business.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="Fetcher">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/scraper/fetcher.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="GeoFilter">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/domain/business.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="ListFilter">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/domain/business.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="Listing">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/domain/business.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="OpeningHours">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/domain/business.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="Options">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/scraper/crawl/crawl.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="Rating">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/domain/business.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="Repo">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/storage/sqlite/sqlite.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="Review">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/domain/business.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="Robots">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/scraper/robots.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="ServiceOffer">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/domain/business.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="Source">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/scraper/booksy/source.go" />
+              <option value="file://$PROJECT_DIR$/internal/scraper/treatwell/source.go" />
+              <option value="file://$PROJECT_DIR$/internal/scraper/web/source.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="Stats">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/scraper/crawl/crawl.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="addressJSON">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/api/handlers.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="businessJSON">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/api/handlers.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="errorJSON">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/api/handlers.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="facetJSON">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/api/handlers.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="fakeRepo">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/api/handlers_test.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="handlers">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/api/handlers.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="hostState">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/scraper/fetcher.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="hoursJSON">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/api/handlers.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="jsonCol">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/storage/sqlite/scan.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="ldNode">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/scraper/schemaorg/schemaorg.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="listResponseJSON">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/api/handlers.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="listingJSON">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/api/handlers.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="listingJSONCols">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/storage/sqlite/scan.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="locationJSON">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/api/handlers.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="pageData">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/scraper/schemaorg/schemaorg.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="ratingJSON">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/api/handlers.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="reviewJSON">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/api/handlers.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="robotsRule">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/scraper/robots.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="serviceJSON">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/api/handlers.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="sitemapIndex">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/scraper/booksy/sitemap.go" />
+              <option value="file://$PROJECT_DIR$/internal/scraper/treatwell/source.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="statusWriter">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/api/server.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="stubGetter">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/scraper/crawl/crawl_test.go" />
+            </set>
+          </value>
+        </entry>
+        <entry key="urlSet">
+          <value>
+            <set>
+              <option value="file://$PROJECT_DIR$/internal/scraper/booksy/sitemap.go" />
+              <option value="file://$PROJECT_DIR$/internal/scraper/treatwell/source.go" />
+            </set>
+          </value>
+        </entry>
+      </map>
+    </option>
+    <option name="scannedPathMapping">
+      <map>
+        <entry key="file://$PROJECT_DIR$/cmd/api/main.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781300717501" />
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/cmd/scraper/main.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781303412977" />
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/api/handlers.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781304177571" />
+              <option name="schema">
+                <list>
+                  <option value="businessJSON" />
+                  <option value="reviewJSON" />
+                  <option value="addressJSON" />
+                  <option value="locationJSON" />
+                  <option value="ratingJSON" />
+                  <option value="hoursJSON" />
+                  <option value="serviceJSON" />
+                  <option value="listingJSON" />
+                  <option value="listResponseJSON" />
+                  <option value="errorJSON" />
+                  <option value="handlers" />
+                  <option value="facetJSON" />
+                </list>
+              </option>
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/api/handlers_test.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781304201426" />
+              <option name="schema">
+                <list>
+                  <option value="fakeRepo" />
+                </list>
+              </option>
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/api/server.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781304178656" />
+              <option name="schema">
+                <list>
+                  <option value="statusWriter" />
+                </list>
+              </option>
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/domain/business.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781304149468" />
+              <option name="schema">
+                <list>
+                  <option value="Listing" />
+                  <option value="Business" />
+                  <option value="Address" />
+                  <option value="Rating" />
+                  <option value="OpeningHours" />
+                  <option value="ServiceOffer" />
+                  <option value="Review" />
+                  <option value="ListFilter" />
+                  <option value="GeoFilter" />
+                  <option value="Facet" />
+                </list>
+              </option>
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/domain/merge.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781302749583" />
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/domain/merge_test.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781302853274" />
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/geo/geo.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781301312870" />
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/match/match.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781301889255" />
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/match/match_test.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781301741488" />
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/scraper/booksy/parser.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781301468752" />
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/scraper/booksy/parser_test.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781301730003" />
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/scraper/booksy/sitemap.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781300412616" />
+              <option name="schema">
+                <list>
+                  <option value="sitemapIndex" />
+                  <option value="urlSet" />
+                </list>
+              </option>
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/scraper/booksy/source.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781301472906" />
+              <option name="schema">
+                <list>
+                  <option value="Source" />
+                </list>
+              </option>
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/scraper/crawl/crawl.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781303335771" />
+              <option name="schema">
+                <list>
+                  <option value="Options" />
+                  <option value="Stats" />
+                </list>
+              </option>
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/scraper/crawl/crawl_test.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781303364453" />
+              <option name="schema">
+                <list>
+                  <option value="stubGetter" />
+                </list>
+              </option>
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/scraper/crawl/links.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781303326272" />
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/scraper/fetcher.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781301442836" />
+              <option name="schema">
+                <list>
+                  <option value="Fetcher" />
+                  <option value="hostState" />
+                </list>
+              </option>
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/scraper/robots.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781301413982" />
+              <option name="schema">
+                <list>
+                  <option value="Robots" />
+                  <option value="robotsRule" />
+                </list>
+              </option>
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/scraper/robots_test.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781301829692" />
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/scraper/schemaorg/schemaorg.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781302774832" />
+              <option name="schema">
+                <list>
+                  <option value="ldNode" />
+                  <option value="pageData" />
+                </list>
+              </option>
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/scraper/schemaorg/schemaorg_test.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781302839209" />
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/scraper/source.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781301455716" />
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/scraper/treatwell/source.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781301504393" />
+              <option name="schema">
+                <list>
+                  <option value="Source" />
+                  <option value="sitemapIndex" />
+                  <option value="urlSet" />
+                </list>
+              </option>
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/scraper/treatwell/source_test.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781302842222" />
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/scraper/web/source.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781303291743" />
+              <option name="schema">
+                <list>
+                  <option value="Source" />
+                </list>
+              </option>
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/storage/sqlite/scan.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781302798185" />
+              <option name="schema">
+                <list>
+                  <option value="jsonCol" />
+                  <option value="listingJSONCols" />
+                </list>
+              </option>
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/storage/sqlite/sqlite.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781304155573" />
+              <option name="schema">
+                <list>
+                  <option value="Repo" />
+                </list>
+              </option>
+            </ScannedPath>
+          </value>
+        </entry>
+        <entry key="file://$PROJECT_DIR$/internal/storage/sqlite/sqlite_test.go">
+          <value>
+            <ScannedPath>
+              <option name="lastModified" value="1781304205594" />
+            </ScannedPath>
+          </value>
+        </entry>
+      </map>
+    </option>
+    <option name="tableStructMapping">
+      <map>
+        <entry key="address" value="Address" />
+        <entry key="address_json" value="addressJSON" />
+        <entry key="business" value="Business" />
+        <entry key="business_json" value="businessJSON" />
+        <entry key="error_json" value="errorJSON" />
+        <entry key="facet" value="Facet" />
+        <entry key="facet_json" value="facetJSON" />
+        <entry key="fake_repo" value="fakeRepo" />
+        <entry key="fetcher" value="Fetcher" />
+        <entry key="geo_filter" value="GeoFilter" />
+        <entry key="handlers" value="handlers" />
+        <entry key="host_state" value="hostState" />
+        <entry key="hours_json" value="hoursJSON" />
+        <entry key="json_col" value="jsonCol" />
+        <entry key="ld_node" value="ldNode" />
+        <entry key="list_filter" value="ListFilter" />
+        <entry key="list_response_json" value="listResponseJSON" />
+        <entry key="listing" value="Listing" />
+        <entry key="listing_json" value="listingJSON" />
+        <entry key="listing_json_cols" value="listingJSONCols" />
+        <entry key="location_json" value="locationJSON" />
+        <entry key="opening_hours" value="OpeningHours" />
+        <entry key="options" value="Options" />
+        <entry key="page_data" value="pageData" />
+        <entry key="rating" value="Rating" />
+        <entry key="rating_json" value="ratingJSON" />
+        <entry key="repo" value="Repo" />
+        <entry key="review" value="Review" />
+        <entry key="review_json" value="reviewJSON" />
+        <entry key="robots" value="Robots" />
+        <entry key="robots_rule" value="robotsRule" />
+        <entry key="service_json" value="serviceJSON" />
+        <entry key="service_offer" value="ServiceOffer" />
+        <entry key="sitemap_index" value="sitemapIndex" />
+        <entry key="source" value="Source" />
+        <entry key="stats" value="Stats" />
+        <entry key="status_writer" value="statusWriter" />
+        <entry key="stub_getter" value="stubGetter" />
+        <entry key="url_set" value="urlSet" />
+      </map>
+    </option>
+    <option name="lastTimeChecked" value="1781336890351" />
+  </component>
+</project>
